@@ -80,7 +80,59 @@ class GlobalSearchServiceProvider extends ServiceProvider
      */
     protected function loadRoutes(): void
     {
+        // For Laravel 12, ensure API routes are enabled
+        if (version_compare(app()->version(), '12.0.0', '>=')) {
+            $this->ensureApiRoutesEnabled();
+        }
+        
         $this->loadRoutesFrom(__DIR__.'/../routes/api.php');
+    }
+
+    /**
+     * Ensure API routes are enabled for Laravel 12+.
+     */
+    protected function ensureApiRoutesEnabled(): void
+    {
+        $apiRoutesPath = base_path('routes/api.php');
+        
+        // Create api.php if it doesn't exist
+        if (!file_exists($apiRoutesPath)) {
+            $this->createApiRoutesFile($apiRoutesPath);
+            \Log::info('Global Search: Created routes/api.php for Laravel 12 compatibility');
+        }
+        
+        // Check if bootstrap/app.php has API routes enabled
+        $this->checkBootstrapConfiguration();
+    }
+
+    /**
+     * Create the API routes file for Laravel 12.
+     */
+    protected function createApiRoutesFile(string $path): void
+    {
+        $content = "<?php\n\nuse Illuminate\Support\Facades\Route;\n\n/*\n|--------------------------------------------------------------------------\n| API Routes\n|--------------------------------------------------------------------------\n|\n| Here is where you can register API routes for your application.\n| The global search package routes are automatically loaded here.\n|\n*/\n\n// Global search routes are loaded by the service provider\n";
+        
+        file_put_contents($path, $content);
+    }
+
+    /**
+     * Check if bootstrap configuration has API routes enabled.
+     */
+    protected function checkBootstrapConfiguration(): void
+    {
+        $bootstrapPath = base_path('bootstrap/app.php');
+        
+        if (!file_exists($bootstrapPath)) {
+            return;
+        }
+        
+        $content = file_get_contents($bootstrapPath);
+        
+        if (!str_contains($content, "api: __DIR__.'/../routes/api.php'")) {
+            \Log::warning('Global Search: Laravel 12 detected - API routes not enabled in bootstrap/app.php');
+            \Log::warning('Global Search: Please add this line to withRouting(): api: __DIR__.\'/../routes/api.php\'');
+            \Log::warning('Global Search: Or run: php artisan global-search:setup-laravel12');
+        }
     }
 
     /**
@@ -117,6 +169,7 @@ class GlobalSearchServiceProvider extends ServiceProvider
                 \LaravelGlobalSearch\GlobalSearch\Console\SearchSyncSettingsCommand::class,
                 \LaravelGlobalSearch\GlobalSearch\Console\SearchWarmCacheCommand::class,
                 \LaravelGlobalSearch\GlobalSearch\Console\SearchDoctorCommand::class,
+                \LaravelGlobalSearch\GlobalSearch\Console\SetupLaravel12Command::class,
             ]);
         }
     }

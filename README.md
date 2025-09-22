@@ -33,7 +33,32 @@ composer require laravel-global-search/global-search
 php artisan vendor:publish --tag=global-search-config
 ```
 
-### 3. Configure Environment Variables
+### 3. Laravel 12 Setup (if applicable)
+
+If you're using Laravel 12, the package will automatically detect this and help you set up API routes:
+
+```bash
+# Automatic setup (recommended)
+php artisan global-search:setup-laravel12
+```
+
+**Manual setup** (if needed):
+1. Create `routes/api.php` (the package will do this automatically)
+2. Update `bootstrap/app.php` to enable API routes:
+
+```php
+// bootstrap/app.php
+return Application::configure(basePath: dirname(__DIR__))
+    ->withRouting(
+        web: __DIR__.'/../routes/web.php',
+        api: __DIR__.'/../routes/api.php',  // Add this line
+        commands: __DIR__.'/../routes/console.php',
+        health: '/up',
+    )
+    // ... rest of configuration
+```
+
+### 4. Configure Environment Variables
 
 Add these to your `.env` file:
 
@@ -51,7 +76,7 @@ GLOBAL_SEARCH_QUEUE=default
 GLOBAL_SEARCH_BATCH_SIZE=1000
 ```
 
-### 4. Make Your Models Searchable
+### 5. Make Your Models Searchable
 
 Add the `Searchable` trait to your models:
 
@@ -71,7 +96,7 @@ class Product extends Model
 }
 ```
 
-### 5. Configure Mappings
+### 6. Configure Mappings
 
 Edit `config/global-search.php` to define your model mappings:
 
@@ -92,7 +117,7 @@ Edit `config/global-search.php` to define your model mappings:
 ],
 ```
 
-### 6. Sync Settings and Index Data
+### 7. Sync Settings and Index Data
 
 ```bash
 # Sync Meilisearch index settings
@@ -128,8 +153,10 @@ $results = $searchService->search('laptop', [
 The package automatically registers an API endpoint:
 
 ```bash
-GET /api/global-search?q=search+query&limit=10
+GET /global-search?q=search+query&limit=10
 ```
+
+**Note:** In Laravel 12, the route is available at `/global-search` (not `/api/global-search`).
 
 ### Frontend Component
 
@@ -378,6 +405,41 @@ php artisan search:doctor
 php artisan tinker
 >>> app(\LaravelGlobalSearch\GlobalSearch\Services\GlobalSearchService::class)->search('test')
 ```
+
+## 🔧 Troubleshooting
+
+### Routes Not Working in Laravel 12?
+
+1. **Check if API routes are enabled:**
+   ```bash
+   php artisan route:list | grep global-search
+   ```
+
+2. **Run the Laravel 12 setup command:**
+   ```bash
+   php artisan global-search:setup-laravel12
+   ```
+
+3. **Verify bootstrap/app.php configuration:**
+   - Ensure `api: __DIR__.'/../routes/api.php'` is in the `withRouting()` section
+   - Check that `routes/api.php` exists
+
+4. **Clear configuration cache:**
+   ```bash
+   php artisan config:clear
+   php artisan route:clear
+   ```
+
+### Common Issues
+
+**Issue:** "Route not found" for `/api/global-search`
+- **Solution:** In Laravel 12, the route is at `/global-search` (not `/api/global-search`). Run `php artisan global-search:setup-laravel12`
+
+**Issue:** Package not loading routes
+- **Solution:** Check that the service provider is registered in `composer.json` and run `composer dump-autoload`
+
+**Issue:** Meilisearch connection errors
+- **Solution:** Verify your `.env` configuration and run `php artisan search:doctor`
 
 ## 📝 Changelog
 

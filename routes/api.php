@@ -13,6 +13,4 @@ use LaravelGlobalSearch\GlobalSearch\Http\Controllers\GlobalSearchController;
 |
 */
 
-Route::middleware('api')->group(function () {
-    Route::get('/global-search', GlobalSearchController::class)->name('global-search.search');
-});
+Route::get('/global-search', GlobalSearchController::class)->name('global-search.search');
