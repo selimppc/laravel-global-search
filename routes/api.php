@@ -1,5 +1,18 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use LaravelGlobalSearch\GlobalSearch\Http\Controllers\GlobalSearchController;
 
-Route::middleware('api')->get('/global-search', \Selimppc\GlobalSearch\Http\Controllers\GlobalSearchController::class);
+/*
+|--------------------------------------------------------------------------
+| Global Search API Routes
+|--------------------------------------------------------------------------
+|
+| These routes are loaded by the GlobalSearchServiceProvider and are
+| automatically registered when the package is installed.
+|
+*/
+
+Route::middleware('api')->group(function () {
+    Route::get('/global-search', GlobalSearchController::class)->name('global-search.search');
+});

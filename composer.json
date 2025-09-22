@@ -1,17 +1,24 @@
 {
-    "name": "selimppc/laravel-global-search",
-    "description": "Config-first federated global search for Laravel powered by Meilisearch.",
+    "name": "laravel-global-search/global-search",
+    "description": "A professional, high-performance global search package for Laravel powered by Meilisearch with federated search capabilities.",
     "type": "library",
     "license": "MIT",
+    "keywords": ["laravel", "search", "meilisearch", "global-search", "federated-search", "eloquent"],
+    "authors": [
+        {
+            "name": "Laravel Global Search Team",
+            "email": "support@laravel-global-search.com"
+        }
+    ],
     "autoload": {
-    "psr-4": {
-        "Selimppc\\GlobalSearch\\": "src/"
-    }
+        "psr-4": {
+            "LaravelGlobalSearch\\GlobalSearch\\": "src/"
+        }
     },
     "extra": {
         "laravel": {
             "providers": [
-                "Selimppc\\GlobalSearch\\GlobalSearchServiceProvider"
+                "LaravelGlobalSearch\\GlobalSearch\\GlobalSearchServiceProvider"
             ]
         }
     },
