@@ -117,7 +117,7 @@ class GlobalSearchService
 
         foreach ($indexes as $indexName) {
             try {
-                $tenantIndex = $this->tenantResolver->getTenantIndexName($indexName);
+                $tenantIndex = $this->tenantResolver->getTenantIndexName($indexName, $tenant);
                 $searchOptions = $this->buildSearchOptions($filters, $limit, $tenant);
                 
                 // Get the index first, then call search on it
@@ -213,7 +213,7 @@ class GlobalSearchService
         try {
             $client = App::make(Client::class);
             foreach ($indexes as $indexName) {
-                $tenantIndexName = $this->tenantResolver->getTenantIndexName($indexName);
+                $tenantIndexName = $this->tenantResolver->getTenantIndexName($indexName, $tenant);
                 $client->index($tenantIndexName)->deleteAllDocuments();
                 Log::info("Flushed index: {$tenantIndexName}");
             }
@@ -230,7 +230,7 @@ class GlobalSearchService
         try {
             $client = App::make(Client::class);
             foreach ($indexes as $indexName) {
-                $tenantIndexName = $this->tenantResolver->getTenantIndexName($indexName);
+                $tenantIndexName = $this->tenantResolver->getTenantIndexName($indexName, $tenant);
                 
                 // Get settings for this specific index from mappings
                 $settings = $this->getIndexSettings($indexName);

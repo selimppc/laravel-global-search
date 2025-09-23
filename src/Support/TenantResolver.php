@@ -29,13 +29,13 @@ class TenantResolver
         return $this->config['tenant']['enabled'] ?? false;
     }
 
-    public function getTenantIndexName(string $baseIndexName): string
+    public function getTenantIndexName(string $baseIndexName, ?string $tenant = null): string
     {
         if (!$this->isMultiTenant()) {
             return $baseIndexName;
         }
 
-        $tenant = $this->getCurrentTenant();
+        $tenant = $tenant ?? $this->getCurrentTenant();
         return $tenant ? "{$baseIndexName}_{$tenant}" : $baseIndexName;
     }
 
