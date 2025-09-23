@@ -76,7 +76,10 @@ class TenantResolver
         $subdomain = $parts[0];
         $exclude = ['www', 'api', 'admin', 'app', 'localhost'];
         
-        return in_array($subdomain, $exclude) ? null : $subdomain;
+        if (in_array($subdomain, $exclude)) return null;
+        
+        // Try to resolve tenant ID from subdomain
+        return $this->resolveTenantIdFromName($subdomain) ?? $subdomain;
     }
 
     private function tryHeader(): ?string
@@ -126,5 +129,38 @@ class TenantResolver
     private function getTenantsFromConfig(): ?array
     {
         return $this->config['tenant']['list'] ?? null;
+    }
+
+    private function resolveTenantIdFromName(string $tenantName): ?string
+    {
+        // Cache tenant resolution for performance
+        $cacheKey = "global_search.tenant_resolution.{$tenantName}";
+        
+        return Cache::remember($cacheKey, 300, function () use ($tenantName) { // 5 minutes cache
+            try {
+                // Try to find tenant by name - check multiple possible tenant model classes
+                $tenantModelClasses = [
+                    'Stancl\Tenancy\Models\Tenant',
+                    'App\Models\Tenant',
+                    config('tenancy.tenant_model'),
+                ];
+                
+                foreach ($tenantModelClasses as $tenantModelClass) {
+                    if ($tenantModelClass && class_exists($tenantModelClass)) {
+                        $tenant = $tenantModelClass::where('name', 'like', "%{$tenantName}%")
+                            ->orWhere('id', $tenantName)
+                            ->first();
+                        
+                        if ($tenant) {
+                            return $tenant->id;
+                        }
+                    }
+                }
+            } catch (\Exception $e) {
+                // Fall back to tenant name if resolution fails
+            }
+            
+            return null;
+        });
     }
 }

@@ -221,8 +221,33 @@ php artisan queue:work --queue=search
 
 ### Search API
 
+The package automatically handles tenant resolution through middleware, so you can use clean URLs:
+
 ```http
+# Automatic tenant resolution (recommended)
+GET /global-search?q=john&limit=10
+
+# Manual tenant specification (fallback)
 GET /global-search?q=john&limit=10&tenant=tenant1
+```
+
+### Automatic Tenant Resolution
+
+The package includes middleware that automatically resolves tenant context from:
+
+1. **Subdomain**: `real-estate.yourdomain.com/global-search`
+2. **Header**: `X-Tenant: real-estate`
+3. **Route Parameter**: `/tenant/real-estate/global-search`
+4. **Query Parameter**: `?tenant=real-estate` (fallback)
+
+### Manual Middleware Registration
+
+If you need to apply the middleware to custom routes:
+
+```php
+// In your routes/web.php or routes/api.php
+Route::get('custom-search', SearchController::class)
+    ->middleware('global-search.tenant');
 ```
 
 Response:
@@ -276,6 +301,9 @@ php artisan search:status --detailed
 
 # Check system health
 php artisan search:health
+
+# Check performance metrics
+php artisan search:performance
 ```
 
 ## 🔍 How It Works

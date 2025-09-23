@@ -37,10 +37,31 @@ class IndexJob implements ShouldQueue
             
             $client = App::make(Client::class);
             
-            // Get model instances
-            $models = $this->modelClass::whereIn('id', $this->modelIds)->get();
+            // Process models in chunks for better memory usage
+            $documents = [];
+            $chunkSize = 100; // Process 100 models at a time
             
-            if ($models->isEmpty()) {
+            foreach (array_chunk($this->modelIds, $chunkSize) as $chunk) {
+                $models = $this->modelClass::whereIn('id', $chunk)->get();
+                
+                if ($models->isEmpty()) {
+                    Log::warning('No models found for chunk', [
+                        'model' => $this->modelClass,
+                        'chunk' => $chunk,
+                        'tenant' => $tenant
+                    ]);
+                    continue;
+                }
+
+                // Transform models to documents
+                $chunkDocuments = $models->map(fn($model) => $this->transformModel($model, $tenant))->toArray();
+                $documents = array_merge($documents, $chunkDocuments);
+                
+                // Free memory
+                unset($models, $chunkDocuments);
+            }
+            
+            if (empty($documents)) {
                 Log::error('No models found for indexing', [
                     'model' => $this->modelClass,
                     'ids' => $this->modelIds,
@@ -48,9 +69,6 @@ class IndexJob implements ShouldQueue
                 ]);
                 return;
             }
-
-            // Transform models to documents
-            $documents = $models->map(fn($model) => $this->transformModel($model, $tenant))->toArray();
             
             // Get index name
             $indexName = $this->getIndexName($tenant);

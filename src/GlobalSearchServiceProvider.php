@@ -37,6 +37,8 @@ class GlobalSearchServiceProvider extends ServiceProvider
             $app[TenantResolver::class],
             $app['config']['global-search']
         ));
+        
+        $this->app->singleton(\LaravelGlobalSearch\GlobalSearch\Services\PerformanceMonitor::class);
     }
 
     public function boot(): void
@@ -44,6 +46,7 @@ class GlobalSearchServiceProvider extends ServiceProvider
         $this->publishConfig();
         $this->registerRoutes();
         $this->registerCommands();
+        $this->registerMiddleware();
     }
 
     private function publishConfig(): void
@@ -56,6 +59,7 @@ class GlobalSearchServiceProvider extends ServiceProvider
     private function registerRoutes(): void
     {
         Route::get('global-search', GlobalSearchController::class)
+            ->middleware('global-search.tenant')
             ->name('global-search.search');
     }
 
@@ -69,8 +73,17 @@ class GlobalSearchServiceProvider extends ServiceProvider
                 FlushCommand::class,
                 StatusCommand::class,
                 HealthCommand::class,
+                \LaravelGlobalSearch\GlobalSearch\Console\PerformanceCommand::class,
             ]);
         }
+    }
+
+    private function registerMiddleware(): void
+    {
+        // Register middleware for automatic tenant context initialization
+        $router = $this->app['router'];
+        
+        $router->aliasMiddleware('global-search.tenant', \LaravelGlobalSearch\GlobalSearch\Http\Middleware\InitializeTenantContext::class);
     }
 
 }

@@ -24,20 +24,26 @@ class GlobalSearchService
     {
         try {
             $tenant = $tenant ?? $this->tenantResolver->getCurrentTenant();
-            $indexes = $this->getIndexes();
             
-            if (empty($indexes)) {
-                return $this->emptyResult($query, $limit);
-            }
-
-            $results = $this->performSearch($query, $filters, $indexes, $limit, $tenant);
+            // Cache search results for performance (short cache for real-time feel)
+            $cacheKey = $this->buildSearchCacheKey($query, $filters, $limit, $tenant);
             
-            // Log only errors, minimal info logging
-            if (empty($results['hits'])) {
-                Log::error('Search returned no results', compact('query', 'tenant', 'filters'));
-            }
+            return Cache::remember($cacheKey, 60, function () use ($query, $filters, $limit, $tenant) { // 1 minute cache
+                $indexes = $this->getIndexes();
+                
+                if (empty($indexes)) {
+                    return $this->emptyResult($query, $limit);
+                }
 
-            return $results;
+                $results = $this->performSearch($query, $filters, $indexes, $limit, $tenant);
+                
+                // Log only errors, minimal info logging
+                if (empty($results['hits'])) {
+                    Log::error('Search returned no results', compact('query', 'tenant', 'filters'));
+                }
+
+                return $results;
+            });
 
         } catch (\Exception $e) {
             Log::error('Search failed', [
@@ -204,6 +210,16 @@ class GlobalSearchService
                 'limit' => $limit
             ]
         ];
+    }
+
+    private function buildSearchCacheKey(string $query, array $filters, int $limit, ?string $tenant): string
+    {
+        return 'global_search.' . md5(serialize([
+            'query' => $query,
+            'filters' => $filters,
+            'limit' => $limit,
+            'tenant' => $tenant
+        ]));
     }
 
     public function flushAll(?string $tenant = null): void
