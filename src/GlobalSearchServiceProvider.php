@@ -78,6 +78,7 @@ class GlobalSearchServiceProvider extends ServiceProvider
                 StatusCommand::class,
                 HealthCommand::class,
                 \LaravelGlobalSearch\GlobalSearch\Console\PerformanceCommand::class,
+                \LaravelGlobalSearch\GlobalSearch\Console\DebugTenantCommand::class,
             ]);
         }
     }

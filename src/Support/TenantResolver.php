@@ -17,6 +17,12 @@ class TenantResolver
 
     public function getCurrentTenant(): ?string
     {
+        // If multi-tenancy is disabled, return null
+        if (!$this->isMultiTenant()) {
+            Log::debug("Multi-tenancy is disabled, returning null");
+            return null;
+        }
+
         // First try to get tenant from Stancl/Tenancy if available
         if (class_exists('Stancl\Tenancy\Tenancy')) {
             try {
@@ -25,19 +31,35 @@ class TenantResolver
                     // Get tenant ID from Stancl/Tenancy tenant
                     $tenant = $tenancy->tenant;
                     // Use tenant ID for proper multi-tenant isolation
-                    return $tenant->id ?? null;
+                    $tenantId = $tenant->id ?? null;
+                    Log::debug("Tenant resolved from Stancl/Tenancy: {$tenantId}");
+                    return $tenantId;
                 }
             } catch (\Exception $e) {
+                Log::debug("Stancl/Tenancy not available: {$e->getMessage()}");
                 // Fall back to our own resolution
             }
         }
 
         // Try multiple strategies automatically
-        return $this->trySubdomain() 
-            ?? $this->tryHeader() 
-            ?? $this->tryRoute() 
-            ?? $this->tryAuth() 
-            ?? $this->tryDefault();
+        $subdomain = $this->trySubdomain();
+        $header = $this->tryHeader();
+        $route = $this->tryRoute();
+        $auth = $this->tryAuth();
+        $default = $this->tryDefault();
+        
+        $tenantId = $subdomain ?? $header ?? $route ?? $auth ?? $default;
+        
+        Log::debug("Tenant resolution attempt", [
+            'subdomain' => $subdomain,
+            'header' => $header,
+            'route' => $route,
+            'auth' => $auth,
+            'default' => $default,
+            'final' => $tenantId
+        ]);
+        
+        return $tenantId;
     }
 
     public function isMultiTenant(): bool
@@ -58,13 +80,22 @@ class TenantResolver
     public function getAllTenants(): array
     {
         if (!$this->isMultiTenant()) {
+            Log::debug("Multi-tenancy disabled, returning empty tenants array");
             return [];
         }
 
         // Auto-detect tenants from common sources
-        return $this->getTenantsFromDatabase() 
-            ?? $this->getTenantsFromConfig() 
-            ?? [];
+        $database = $this->getTenantsFromDatabase();
+        $config = $this->getTenantsFromConfig();
+        $tenants = $database ?? $config ?? [];
+        
+        Log::debug("Getting all tenants", [
+            'database' => $database,
+            'config' => $config,
+            'final' => $tenants
+        ]);
+        
+        return $tenants;
     }
 
     private function trySubdomain(): ?string
@@ -75,7 +106,7 @@ class TenantResolver
         if (count($parts) < 2) return null;
         
         $subdomain = $parts[0];
-        $exclude = ['www', 'api', 'admin', 'app', 'localhost'];
+        $exclude = ['www', 'api', 'admin', 'app', 'localhost', '127.0.0.1'];
         
         if (in_array($subdomain, $exclude)) return null;
         
@@ -107,6 +138,10 @@ class TenantResolver
     {
         // Get first available tenant as default
         $tenants = $this->getAllTenants();
+        Log::debug("Default tenant resolution", [
+            'tenants' => $tenants,
+            'first_tenant' => $tenants[0] ?? null
+        ]);
         return $tenants[0] ?? null;
     }
 
