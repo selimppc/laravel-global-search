@@ -71,10 +71,7 @@ class ReindexCommand extends Command
             $this->info('No tenants found. Reindexing current context...');
             $this->reindexCurrentContext($searchService, $force);
         } else {
-            if (!$force && !$this->confirm('This will reindex all models for all tenants. Continue?')) {
-                $this->info('Reindex cancelled.');
-                return;
-            }
+            $this->info('Reindexing all tenants...');
             
             foreach ($tenants as $tenantId) {
                 $this->info("Reindexing tenant: {$tenantId}");
@@ -85,11 +82,6 @@ class ReindexCommand extends Command
     
     private function reindexCurrentContext(GlobalSearchService $searchService, bool $force): void
     {
-        if (!$force && !$this->confirm("This will reindex all models for the current context. Continue?")) {
-            $this->info('Reindex cancelled.');
-            return;
-        }
-
         $this->info("Starting reindex for current context...");
         
         // Get configuration to show what will be indexed
@@ -127,11 +119,6 @@ class ReindexCommand extends Command
     
     private function reindexTenant(GlobalSearchService $searchService, ?string $tenant, bool $force): void
     {
-        if (!$force && !$this->confirm("This will reindex all models for tenant: " . ($tenant ?? 'default') . ". Continue?")) {
-            $this->info('Reindex cancelled.');
-            return;
-        }
-
         $this->info("Starting reindex for tenant: " . ($tenant ?? 'default'));
         
         // Get configuration to show what will be indexed
@@ -198,19 +185,50 @@ class ReindexCommand extends Command
         // If tenant is "default" or null, try to get the first available tenant
         if ($tenant === 'default' || $tenant === null) {
             try {
-                // Try to get tenants from Stancl/Tenancy
+                // Method 1: Try to get from database directly
                 if (class_exists(\Stancl\Tenancy\Models\Tenant::class)) {
                     $firstTenant = \Stancl\Tenancy\Models\Tenant::first();
-                    return $firstTenant ? $firstTenant->id : null;
-                }
-                
-                // Try to get from tenancy() helper
-                if (function_exists('tenancy')) {
-                    $tenants = tenancy()->all();
-                    if (!empty($tenants)) {
-                        return array_keys($tenants)[0];
+                    if ($firstTenant) {
+                        return $firstTenant->id ?? $firstTenant->domain ?? $firstTenant->name;
                     }
                 }
+                
+                // Method 2: Try alternative Tenant model locations
+                $tenantModels = [
+                    \App\Models\Tenant::class,
+                    \App\Tenant::class,
+                    \Tenant::class,
+                ];
+                
+                foreach ($tenantModels as $modelClass) {
+                    if (class_exists($modelClass)) {
+                        $firstTenant = $modelClass::first();
+                        if ($firstTenant) {
+                            return $firstTenant->id ?? $firstTenant->domain ?? $firstTenant->name;
+                        }
+                    }
+                }
+                
+                // Method 3: Try to get from config
+                $tenantConfig = config('tenancy.tenant_model');
+                if ($tenantConfig && class_exists($tenantConfig)) {
+                    $firstTenant = $tenantConfig::first();
+                    if ($firstTenant) {
+                        return $firstTenant->id ?? $firstTenant->domain ?? $firstTenant->name;
+                    }
+                }
+                
+                // Method 4: Try to get from tenancy() helper (if it has the right methods)
+                if (function_exists('tenancy')) {
+                    $tenancy = tenancy();
+                    if (method_exists($tenancy, 'all')) {
+                        $tenants = $tenancy->all();
+                        if (!empty($tenants)) {
+                            return array_keys($tenants)[0];
+                        }
+                    }
+                }
+                
             } catch (\Exception $e) {
                 $this->warn("Failed to get tenant ID: {$e->getMessage()}");
             }

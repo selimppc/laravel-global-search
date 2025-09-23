@@ -25,10 +25,7 @@ class FlushCommand extends Command
                     $this->info('No tenants found. Flushing default index...');
                     $this->flushTenant($searchService, null, $force);
                 } else {
-                    if (!$force && !$this->confirm('This will flush all documents from all tenants. Continue?')) {
-                        $this->info('Flush cancelled.');
-                        return Command::SUCCESS;
-                    }
+                    $this->info('Flushing all tenants...');
                     
                     foreach ($tenants as $tenantId) {
                         $this->info("Flushing tenant: {$tenantId}");
@@ -49,11 +46,6 @@ class FlushCommand extends Command
     
     private function flushTenant(GlobalSearchService $searchService, ?string $tenant, bool $force): void
     {
-        if (!$force && !$this->confirm("This will flush all documents for tenant: " . ($tenant ?? 'default') . ". Continue?")) {
-            $this->info('Flush cancelled.');
-            return;
-        }
-
         $this->info("Starting flush for tenant: " . ($tenant ?? 'default'));
         $searchService->flushAll($tenant);
         $this->info('Flush completed successfully!');
