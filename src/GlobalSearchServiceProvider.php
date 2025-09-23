@@ -24,8 +24,7 @@ class GlobalSearchServiceProvider extends ServiceProvider
         
         $this->app->singleton(Client::class, fn($app) => new Client(
             $app['config']['global-search.client.host'],
-            $app['config']['global-search.client.key'] ?? null,
-            $app['config']['global-search.client.timeout'] ?? 5
+            $app['config']['global-search.client.key'] ?? null
         ));
         
         $this->app->singleton(TenantResolver::class, fn($app) => new TenantResolver(

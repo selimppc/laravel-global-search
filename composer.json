@@ -13,6 +13,7 @@
         "illuminate/cache": "^10.0|^11.0",
         "illuminate/database": "^10.0|^11.0",
         "illuminate/queue": "^10.0|^11.0",
+        "meilisearch/meilisearch-php": "^1.0",
         "guzzlehttp/guzzle": "^7.0",
         "ext-json": "*",
         "ext-curl": "*"

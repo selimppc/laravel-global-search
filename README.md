@@ -10,6 +10,17 @@ A modern, minimal Laravel package for global search functionality with Meilisear
 composer require laravel-global-search/global-search
 ```
 
+**Note:** This package requires Meilisearch. If you don't have it installed, you can install it via:
+
+```bash
+# Using Docker
+docker run -it --rm -p 7700:7700 getmeili/meilisearch:latest
+
+# Or install Meilisearch directly
+curl -L https://install.meilisearch.com | sh
+./meilisearch --master-key="your-master-key"
+```
+
 ### 2. Publish Configuration
 
 ```bash

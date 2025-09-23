@@ -36,6 +36,9 @@ coverage/
 .env.local
 .env.testing
 
+# Development tools
+verify-installation.php
+
 # Build artifacts
 build/
 dist/
