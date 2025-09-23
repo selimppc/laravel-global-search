@@ -31,7 +31,6 @@ class InitializeTenantContext
             
             if ($tenantId) {
                 $this->initializeTenantContext($tenantId);
-                Log::info("Tenant context initialized by middleware: {$tenantId}");
             } else {
                 Log::debug("No tenant ID resolved by middleware.");
             }

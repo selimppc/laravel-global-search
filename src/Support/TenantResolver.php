@@ -176,13 +176,25 @@ class TenantResolver
     {
         try {
             $model = $this->config['tenant']['model'] ?? null;
-            if (!$model || !class_exists($model)) return null;
+            if (!$model || !class_exists($model)) {
+                Log::debug("Tenant model not found or not configured", [
+                    'model' => $model,
+                    'class_exists' => $model ? class_exists($model) : false
+                ]);
+                return null;
+            }
 
-            $identifier = $this->config['tenant']['identifier_column'] ?? 'name';
+            // Always get tenant IDs, not names
+            $tenants = $model::select('id')->get();
+            $tenantIds = $tenants->pluck('id')->filter()->toArray();
             
-            // Try to get a meaningful identifier, fallback to id if needed
-            $tenants = $model::select($identifier)->get();
-            return $tenants->pluck($identifier)->filter()->toArray();
+            Log::debug("Retrieved tenants from database", [
+                'model' => $model,
+                'count' => count($tenantIds),
+                'ids' => $tenantIds
+            ]);
+            
+            return $tenantIds;
         } catch (\Exception $e) {
             Log::error('Failed to get tenants from database', ['error' => $e->getMessage()]);
             return null;
