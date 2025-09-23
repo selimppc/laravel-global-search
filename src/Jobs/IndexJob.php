@@ -30,7 +30,13 @@ class IndexJob implements ShouldQueue
     {
         try {
             $tenant = $this->tenant ?? $tenantResolver->getCurrentTenant();
-            $client = App::make(\LaravelGlobalSearch\GlobalSearch\Support\MeilisearchClient::class);
+            
+            // Initialize tenant context if needed (Stancl/Tenancy)
+            if ($tenant && $this->needsTenantInitialization()) {
+                $this->initializeTenantContext($tenant);
+            }
+            
+            $client = App::make(Client::class);
             
             // Get model instances
             $models = $this->modelClass::whereIn('id', $this->modelIds)->get();
@@ -96,5 +102,26 @@ class IndexJob implements ShouldQueue
     {
         $baseIndex = strtolower(class_basename($this->modelClass));
         return $tenant ? "{$baseIndex}_{$tenant}" : $baseIndex;
+    }
+    
+    private function needsTenantInitialization(): bool
+    {
+        // Check if Stancl/Tenancy is available
+        return class_exists(\Stancl\Tenancy\Tenancy::class);
+    }
+    
+    private function initializeTenantContext(string $tenant): void
+    {
+        try {
+            // Try to initialize tenant context using Stancl/Tenancy
+            if (function_exists('tenancy')) {
+                tenancy()->initialize($tenant);
+            } elseif (class_exists(\Stancl\Tenancy\Tenancy::class)) {
+                app(\Stancl\Tenancy\Tenancy::class)->initialize($tenant);
+            }
+        } catch (\Exception $e) {
+            Log::error("Failed to initialize tenant context in IndexJob: {$e->getMessage()}");
+            throw $e;
+        }
     }
 }

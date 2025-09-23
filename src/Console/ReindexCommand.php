@@ -66,6 +66,15 @@ class ReindexCommand extends Command
         }
         
         $this->info('Models to be indexed:');
+        
+        // Check if we need to initialize tenant context (Stancl/Tenancy)
+        $needsTenantInit = $this->needsTenantInitialization($tenant);
+        
+        if ($needsTenantInit && $tenant) {
+            $this->info("Initializing tenant context for: {$tenant}");
+            $this->initializeTenantContext($tenant);
+        }
+        
         foreach ($mappings as $mapping) {
             $modelClass = $mapping['model'];
             if (class_exists($modelClass)) {
@@ -87,5 +96,35 @@ class ReindexCommand extends Command
         $this->line('  - Check queue: php artisan queue:work');
         $this->line('  - Check logs: tail -f storage/logs/laravel.log');
         $this->line('  - Check health: php artisan search:health');
+    }
+    
+    private function needsTenantInitialization(?string $tenant): bool
+    {
+        // Check if Stancl/Tenancy is available
+        if (!class_exists(\Stancl\Tenancy\Tenancy::class)) {
+            return false;
+        }
+        
+        // Check if we have a tenant and multi-tenancy is not explicitly disabled
+        return $tenant !== null;
+    }
+    
+    private function initializeTenantContext(string $tenant): void
+    {
+        try {
+            // Try to initialize tenant context using Stancl/Tenancy
+            if (function_exists('tenancy')) {
+                tenancy()->initialize($tenant);
+                $this->info("✅ Tenant context initialized: {$tenant}");
+            } elseif (class_exists(\Stancl\Tenancy\Tenancy::class)) {
+                app(\Stancl\Tenancy\Tenancy::class)->initialize($tenant);
+                $this->info("✅ Tenant context initialized: {$tenant}");
+            } else {
+                $this->warn("⚠️  Could not initialize tenant context. Make sure Stancl/Tenancy is properly installed.");
+            }
+        } catch (\Exception $e) {
+            $this->error("❌ Failed to initialize tenant context: {$e->getMessage()}");
+            $this->warn("Continuing with landlord database...");
+        }
     }
 }
