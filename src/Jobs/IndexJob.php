@@ -31,10 +31,8 @@ class IndexJob implements ShouldQueue
         try {
             $tenant = $this->tenant ?? $tenantResolver->getCurrentTenant();
             
-            // Initialize tenant context if needed (Stancl/Tenancy)
-            if ($tenant && $this->needsTenantInitialization()) {
-                $this->initializeTenantContext($tenant);
-            }
+            // Tenant context should already be initialized globally
+            // No need to manually initialize it here
             
             $client = App::make(Client::class);
             
@@ -108,6 +106,32 @@ class IndexJob implements ShouldQueue
     {
         // Check if Stancl/Tenancy is available
         return class_exists(\Stancl\Tenancy\Tenancy::class);
+    }
+    
+    private function getActualTenantId(?string $tenant): ?string
+    {
+        // If tenant is "default" or null, try to get the first available tenant
+        if ($tenant === 'default' || $tenant === null) {
+            try {
+                // Try to get tenants from Stancl/Tenancy
+                if (class_exists(\Stancl\Tenancy\Models\Tenant::class)) {
+                    $firstTenant = \Stancl\Tenancy\Models\Tenant::first();
+                    return $firstTenant ? $firstTenant->id : null;
+                }
+                
+                // Try to get from tenancy() helper
+                if (function_exists('tenancy')) {
+                    $tenants = tenancy()->all();
+                    if (!empty($tenants)) {
+                        return array_keys($tenants)[0];
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::error("Failed to get tenant ID in IndexJob: {$e->getMessage()}");
+            }
+        }
+        
+        return $tenant;
     }
     
     private function initializeTenantContext(string $tenant): void
