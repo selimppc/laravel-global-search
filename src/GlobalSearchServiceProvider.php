@@ -3,9 +3,13 @@
 namespace LaravelGlobalSearch\GlobalSearch;
 
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\Log;
 use LaravelGlobalSearch\GlobalSearch\Services\GlobalSearchService;
 use LaravelGlobalSearch\GlobalSearch\Support\MeilisearchClient;
 use LaravelGlobalSearch\GlobalSearch\Support\SearchIndexManager;
+use LaravelGlobalSearch\GlobalSearch\Contracts\TenantResolver;
+use LaravelGlobalSearch\GlobalSearch\Support\DefaultTenantResolver;
 
 class GlobalSearchServiceProvider extends ServiceProvider
 {
@@ -17,6 +21,7 @@ class GlobalSearchServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(__DIR__.'/../config/global-search.php', 'global-search');
 
         $this->registerMeilisearchClient();
+        $this->registerTenantResolver();
         $this->registerSearchIndexManager();
         $this->registerGlobalSearchService();
     }
@@ -38,6 +43,23 @@ class GlobalSearchServiceProvider extends ServiceProvider
     }
 
     /**
+     * Register the tenant resolver.
+     */
+    protected function registerTenantResolver(): void
+    {
+        $this->app->singleton(TenantResolver::class, function ($app) {
+            $config = $app['config']['global-search'];
+            $customResolver = $config['tenant']['resolver'] ?? null;
+            
+            if ($customResolver && is_callable($customResolver)) {
+                return $customResolver($app);
+            }
+            
+            return new DefaultTenantResolver($config);
+        });
+    }
+
+    /**
      * Register the search index manager.
      */
     protected function registerSearchIndexManager(): void
@@ -45,6 +67,7 @@ class GlobalSearchServiceProvider extends ServiceProvider
         $this->app->singleton(SearchIndexManager::class, function ($app) {
             return new SearchIndexManager(
                 $app[MeilisearchClient::class],
+                $app[TenantResolver::class],
                 $app['config']['global-search']
             );
         });
@@ -58,6 +81,7 @@ class GlobalSearchServiceProvider extends ServiceProvider
         $this->app->singleton(GlobalSearchService::class, function ($app) {
             return new GlobalSearchService(
                 $app[SearchIndexManager::class],
+                $app[TenantResolver::class],
                 $app['cache.store'],
                 $app['config']['global-search']
             );
@@ -81,7 +105,7 @@ class GlobalSearchServiceProvider extends ServiceProvider
     protected function loadRoutes(): void
     {
         // For Laravel 12, ensure API routes are enabled
-        if (version_compare(app()->version(), '12.0.0', '>=')) {
+        if (version_compare(App::version(), '12.0.0', '>=')) {
             $this->ensureApiRoutesEnabled();
         }
         
@@ -93,12 +117,12 @@ class GlobalSearchServiceProvider extends ServiceProvider
      */
     protected function ensureApiRoutesEnabled(): void
     {
-        $apiRoutesPath = base_path('routes/api.php');
+        $apiRoutesPath = App::basePath('routes/api.php');
         
         // Create api.php if it doesn't exist
         if (!file_exists($apiRoutesPath)) {
             $this->createApiRoutesFile($apiRoutesPath);
-            \Log::info('Global Search: Created routes/api.php for Laravel 12 compatibility');
+            Log::info('Global Search: Created routes/api.php for Laravel 12 compatibility');
         }
         
         // Check if bootstrap/app.php has API routes enabled
@@ -129,9 +153,9 @@ class GlobalSearchServiceProvider extends ServiceProvider
         $content = file_get_contents($bootstrapPath);
         
         if (!str_contains($content, "api: __DIR__.'/../routes/api.php'")) {
-            \Log::warning('Global Search: Laravel 12 detected - API routes not enabled in bootstrap/app.php');
-            \Log::warning('Global Search: Please add this line to withRouting(): api: __DIR__.\'/../routes/api.php\'');
-            \Log::warning('Global Search: Or run: php artisan global-search:setup-laravel12');
+            Log::warning('Global Search: Laravel 12 detected - API routes not enabled in bootstrap/app.php');
+            Log::warning('Global Search: Please add this line to withRouting(): api: __DIR__.\'/../routes/api.php\'');
+            Log::warning('Global Search: Or run: php artisan global-search:setup-laravel12');
         }
     }
 
@@ -170,6 +194,10 @@ class GlobalSearchServiceProvider extends ServiceProvider
                 \LaravelGlobalSearch\GlobalSearch\Console\SearchWarmCacheCommand::class,
                 \LaravelGlobalSearch\GlobalSearch\Console\SearchDoctorCommand::class,
                 \LaravelGlobalSearch\GlobalSearch\Console\SetupLaravel12Command::class,
+                // Multi-tenant commands
+                \LaravelGlobalSearch\GlobalSearch\Console\SearchReindexTenantCommand::class,
+                \LaravelGlobalSearch\GlobalSearch\Console\SearchFlushTenantCommand::class,
+                \LaravelGlobalSearch\GlobalSearch\Console\SearchListTenantsCommand::class,
             ]);
         }
     }

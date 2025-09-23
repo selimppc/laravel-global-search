@@ -4,6 +4,7 @@ namespace LaravelGlobalSearch\GlobalSearch\Console;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Config;
 use LaravelGlobalSearch\GlobalSearch\Support\SearchIndexManager;
 
 /**
@@ -39,7 +40,7 @@ class SearchSyncSettingsCommand extends Command
                 $this->info('✅ All index settings synced successfully!');
             }
 
-            return self::SUCCESS;
+            return Command::SUCCESS;
 
         } catch (\Exception $e) {
             $this->error("❌ Failed to sync settings: {$e->getMessage()}");
@@ -48,7 +49,7 @@ class SearchSyncSettingsCommand extends Command
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
-            return self::FAILURE;
+            return Command::FAILURE;
         }
     }
 
@@ -57,7 +58,7 @@ class SearchSyncSettingsCommand extends Command
      */
     private function syncSpecificIndex(SearchIndexManager $indexManager, string $indexName): void
     {
-        $config = config('global-search.index_settings', []);
+        $config = Config::get('global-search.index_settings', []);
         
         if (!isset($config[$indexName])) {
             $this->error("❌ No settings found for index: {$indexName}");

@@ -4,7 +4,10 @@ namespace LaravelGlobalSearch\GlobalSearch\Services;
 
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\Cache;
 use LaravelGlobalSearch\GlobalSearch\Support\SearchIndexManager;
+use LaravelGlobalSearch\GlobalSearch\Contracts\TenantResolver;
 
 /**
  * Global search service that provides federated search across multiple indexes.
@@ -16,6 +19,7 @@ class GlobalSearchService
      */
     public function __construct(
         private SearchIndexManager $indexManager,
+        private TenantResolver $tenantResolver,
         private CacheRepository $cache,
         private array $config
     ) {
@@ -24,7 +28,7 @@ class GlobalSearchService
     /**
      * Perform a global search across all configured indexes.
      */
-    public function search(string $query, array $filtersByIndex = [], int $limit = 10): array
+    public function search(string $query, array $filtersByIndex = [], int $limit = 10, ?string $tenantId = null): array
     {
         $federation = $this->config['federation'] ?? [];
         $indexes = array_keys($federation['indexes'] ?? []);
@@ -33,14 +37,20 @@ class GlobalSearchService
             return $this->buildEmptySearchResult($query, $limit);
         }
 
+        // Use provided tenant ID or resolve from current context
+        $tenant = $tenantId ?? $this->tenantResolver->getCurrentTenant();
+        
+        // Get tenant-specific index names
+        $tenantIndexes = $this->getTenantIndexNames($indexes, $tenant);
+
         // Check cache first
-        $cacheKey = $this->buildCacheKey($query, $filtersByIndex, $indexes, $limit);
+        $cacheKey = $this->buildCacheKey($query, $filtersByIndex, $tenantIndexes, $limit, $tenant);
         if ($this->isCacheEnabled() && $this->cache->has($cacheKey)) {
             return $this->cache->get($cacheKey);
         }
 
-        // Perform search across all indexes
-        $searchResults = $this->performFederatedSearch($query, $filtersByIndex, $indexes, $limit);
+        // Perform search across all tenant indexes
+        $searchResults = $this->performFederatedSearch($query, $filtersByIndex, $tenantIndexes, $limit, $tenant);
         
         // Cache the results
         if ($this->isCacheEnabled()) {
@@ -67,15 +77,33 @@ class GlobalSearchService
     }
 
     /**
+     * Get tenant-specific index names.
+     */
+    private function getTenantIndexNames(array $baseIndexes, ?string $tenantId): array
+    {
+        if (!$this->tenantResolver->isMultiTenant() || !$tenantId) {
+            return $baseIndexes;
+        }
+
+        $tenantIndexes = [];
+        foreach ($baseIndexes as $index) {
+            $tenantIndexes[$index] = $this->tenantResolver->getTenantIndexName($index);
+        }
+
+        return $tenantIndexes;
+    }
+
+    /**
      * Build cache key for search results.
      */
-    private function buildCacheKey(string $query, array $filtersByIndex, array $indexes, int $limit): string
+    private function buildCacheKey(string $query, array $filtersByIndex, array $indexes, int $limit, ?string $tenantId = null): string
     {
         $versions = $this->getIndexVersions($indexes);
         $filtersHash = sha1(json_encode($filtersByIndex));
         $indexesHash = sha1(implode(',', $indexes));
+        $tenantHash = $tenantId ? sha1($tenantId) : 'single';
         
-        return "gs:" . implode('|', $versions) . ":{$query}:{$filtersHash}:{$indexesHash}:{$limit}";
+        return "gs:{$tenantHash}:" . implode('|', $versions) . ":{$query}:{$filtersHash}:{$indexesHash}:{$limit}";
     }
 
     /**
@@ -88,7 +116,7 @@ class GlobalSearchService
         $versionKeyPrefix = $this->config['cache']['version_key_prefix'] ?? 'gs:index:';
         
         foreach ($indexes as $index) {
-            $versions[$index] = (int) cache()->store($cacheStore)->get($versionKeyPrefix . $index, 0);
+            $versions[$index] = (int) Cache::store($cacheStore)->get($versionKeyPrefix . $index, 0);
         }
         
         return $versions;
@@ -105,36 +133,57 @@ class GlobalSearchService
     /**
      * Perform the actual federated search.
      */
-    private function performFederatedSearch(string $query, array $filtersByIndex, array $indexes, int $limit): array
+    private function performFederatedSearch(string $query, array $filtersByIndex, array $indexes, int $limit, ?string $tenantId = null): array
     {
-        $meilisearchClient = app(\LaravelGlobalSearch\GlobalSearch\Support\MeilisearchClient::class);
+        $meilisearchClient = App::make(\LaravelGlobalSearch\GlobalSearch\Support\MeilisearchClient::class);
         $federation = $this->config['federation'] ?? [];
         $allHits = [];
         $totalHits = 0;
 
-        foreach ($indexes as $indexName) {
+        foreach ($indexes as $baseIndexName => $tenantIndexName) {
             try {
-                $searchOptions = $this->buildSearchOptions($filtersByIndex, $indexName, $limit);
-                $searchResult = $meilisearchClient->search($indexName, $query, $searchOptions);
+                $searchOptions = $this->buildSearchOptions($filtersByIndex, $baseIndexName, $limit);
+                
+                // Add tenant filter if multi-tenant
+                if ($this->tenantResolver->isMultiTenant() && $tenantId) {
+                    $searchOptions['filter'] = $this->addTenantFilter($searchOptions['filter'] ?? '', $tenantId);
+                }
+                
+                $searchResult = $meilisearchClient->search($tenantIndexName, $query, $searchOptions);
                 
                 $weightedHits = $this->applyIndexWeighting(
                     $searchResult['hits'] ?? [],
-                    $indexName,
-                    $federation['indexes'][$indexName] ?? []
+                    $baseIndexName,
+                    $federation['indexes'][$baseIndexName] ?? []
                 );
                 
                 $allHits = array_merge($allHits, $weightedHits);
                 $totalHits += (int) ($searchResult['estimatedTotalHits'] ?? 0);
                 
             } catch (\Exception $e) {
-                Log::error("Search failed for index: {$indexName}", [
+                Log::error("Search failed for index: {$tenantIndexName}", [
                     'query' => $query,
+                    'tenant' => $tenantId,
                     'error' => $e->getMessage()
                 ]);
             }
         }
 
-        return $this->buildSearchResult($allHits, $totalHits, $indexes, $query, $limit);
+        return $this->buildSearchResult($allHits, $totalHits, array_keys($indexes), $query, $limit);
+    }
+
+    /**
+     * Add tenant filter to existing filter string.
+     */
+    private function addTenantFilter(string $existingFilter, string $tenantId): string
+    {
+        $tenantFilter = "_tenant_id = {$tenantId}";
+        
+        if (empty($existingFilter)) {
+            return $tenantFilter;
+        }
+        
+        return "({$existingFilter}) AND ({$tenantFilter})";
     }
 
     /**

@@ -5,7 +5,11 @@ namespace LaravelGlobalSearch\GlobalSearch\Support;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Arr;
 use LaravelGlobalSearch\GlobalSearch\Contracts\SearchDocumentTransformer;
+use LaravelGlobalSearch\GlobalSearch\Contracts\TenantResolver;
 
 /**
  * Manages search indexes and document operations.
@@ -17,6 +21,7 @@ class SearchIndexManager
      */
     public function __construct(
         private MeilisearchClient $meilisearchClient,
+        private TenantResolver $tenantResolver,
         private array $config
     ) {
     }
@@ -51,7 +56,7 @@ class SearchIndexManager
         
         // Add mapped fields
         foreach (($mapping['fields'] ?? []) as $field) {
-            $document[$field] = data_get($model, $field);
+            $document[$field] = Arr::get($model->toArray(), $field);
         }
         
         // Add computed fields
@@ -86,7 +91,7 @@ class SearchIndexManager
         }
         
         try {
-            return app($transformerClass);
+            return App::make($transformerClass);
         } catch (\Exception $e) {
             Log::error("Failed to resolve transformer '{$transformerClass}'", [
                 'error' => $e->getMessage()
@@ -99,13 +104,17 @@ class SearchIndexManager
     /**
      * Index multiple models to their search index.
      */
-    public function indexModels(string $modelClass, array $modelIds): void
+    public function indexModels(string $modelClass, array $modelIds, ?string $tenantId = null): void
     {
         $mapping = $this->findMappingByModel($modelClass);
         if (!$mapping) {
             Log::warning("No mapping found for model: {$modelClass}");
             return;
         }
+
+        // Use provided tenant ID or resolve from current context
+        $tenant = $tenantId ?? $this->tenantResolver->getCurrentTenant();
+        $indexName = $this->getTenantIndexName($mapping['index'], $tenant);
 
         $model = new $modelClass;
         $primaryKey = $mapping['primary_key'] ?? $model->getKeyName();
@@ -121,11 +130,16 @@ class SearchIndexManager
                     ? $transformer($modelInstance, $mapping)
                     : $this->buildDocument($modelInstance, $mapping);
                 
+                // Add tenant context to document if multi-tenant
+                if ($this->tenantResolver->isMultiTenant() && $tenant) {
+                    $document['_tenant_id'] = $tenant;
+                }
+                
                 $batch[] = $document;
 
                 if (count($batch) >= $batchSize) {
                     $this->meilisearchClient->addDocuments(
-                        $mapping['index'], 
+                        $indexName, 
                         $batch, 
                         $mapping['primary_key'] ?? null
                     );
@@ -135,17 +149,18 @@ class SearchIndexManager
 
             if (!empty($batch)) {
                 $this->meilisearchClient->addDocuments(
-                    $mapping['index'], 
+                    $indexName, 
                     $batch, 
                     $mapping['primary_key'] ?? null
                 );
             }
 
-            $this->incrementIndexVersion($mapping['index']);
+            $this->incrementIndexVersion($indexName);
             
         } catch (\Exception $e) {
             Log::error("Failed to index models for {$modelClass}", [
                 'model_ids' => $modelIds,
+                'tenant' => $tenant,
                 'error' => $e->getMessage()
             ]);
             
@@ -158,7 +173,7 @@ class SearchIndexManager
     /**
      * Delete models from their search index.
      */
-    public function deleteModels(string $modelClass, array $modelIds): void
+    public function deleteModels(string $modelClass, array $modelIds, ?string $tenantId = null): void
     {
         $mapping = $this->findMappingByModel($modelClass);
         if (!$mapping) {
@@ -166,12 +181,17 @@ class SearchIndexManager
             return;
         }
 
+        // Use provided tenant ID or resolve from current context
+        $tenant = $tenantId ?? $this->tenantResolver->getCurrentTenant();
+        $indexName = $this->getTenantIndexName($mapping['index'], $tenant);
+
         try {
-            $this->meilisearchClient->deleteDocuments($mapping['index'], $modelIds);
-            $this->incrementIndexVersion($mapping['index']);
+            $this->meilisearchClient->deleteDocuments($indexName, $modelIds);
+            $this->incrementIndexVersion($indexName);
         } catch (\Exception $e) {
             Log::error("Failed to delete models for {$modelClass}", [
                 'model_ids' => $modelIds,
+                'tenant' => $tenant,
                 'error' => $e->getMessage()
             ]);
             
@@ -180,15 +200,30 @@ class SearchIndexManager
     }
 
     /**
+     * Get tenant-specific index name.
+     */
+    private function getTenantIndexName(string $baseIndexName, ?string $tenantId = null): string
+    {
+        if (!$this->tenantResolver->isMultiTenant() || !$tenantId) {
+            return $baseIndexName;
+        }
+
+        return $this->tenantResolver->getTenantIndexName($baseIndexName);
+    }
+
+    /**
      * Flush all documents from an index.
      */
-    public function flushIndex(string $indexName): void
+    public function flushIndex(string $indexName, ?string $tenantId = null): void
     {
+        $tenantIndexName = $this->getTenantIndexName($indexName, $tenantId);
+        
         try {
-            $this->meilisearchClient->deleteAllDocuments($indexName);
-            $this->incrementIndexVersion($indexName);
+            $this->meilisearchClient->deleteAllDocuments($tenantIndexName);
+            $this->incrementIndexVersion($tenantIndexName);
         } catch (\Exception $e) {
-            Log::error("Failed to flush index: {$indexName}", [
+            Log::error("Failed to flush index: {$tenantIndexName}", [
+                'tenant' => $tenantId,
                 'error' => $e->getMessage()
             ]);
             
@@ -199,7 +234,7 @@ class SearchIndexManager
     /**
      * Sync index settings from configuration.
      */
-    public function syncIndexSettings(): void
+    public function syncIndexSettings(?string $tenantId = null): void
     {
         $indexSettings = $this->config['index_settings'] ?? [];
         
@@ -208,17 +243,48 @@ class SearchIndexManager
             return;
         }
 
-        foreach ($indexSettings as $indexName => $settings) {
-            try {
-                $this->meilisearchClient->updateSettings($indexName, $settings);
-                Log::info("Synced settings for index: {$indexName}");
-            } catch (\Exception $e) {
-                Log::error("Failed to sync settings for index: {$indexName}", [
-                    'error' => $e->getMessage()
-                ]);
-                
-                throw new \RuntimeException("Sync settings failed for {$indexName}: {$e->getMessage()}", 0, $e);
+        if ($this->tenantResolver->isMultiTenant() && $tenantId) {
+            // Sync settings for specific tenant
+            $this->syncSettingsForTenant($indexSettings, $tenantId);
+        } elseif ($this->tenantResolver->isMultiTenant()) {
+            // Sync settings for all tenants
+            $tenants = $this->tenantResolver->getAllTenants();
+            foreach ($tenants as $tenant) {
+                $this->syncSettingsForTenant($indexSettings, $tenant);
             }
+        } else {
+            // Single tenant mode
+            foreach ($indexSettings as $indexName => $settings) {
+                $this->updateIndexSettings($indexName, $settings);
+            }
+        }
+    }
+
+    /**
+     * Sync settings for a specific tenant.
+     */
+    private function syncSettingsForTenant(array $indexSettings, string $tenantId): void
+    {
+        foreach ($indexSettings as $indexName => $settings) {
+            $tenantIndexName = $this->getTenantIndexName($indexName, $tenantId);
+            $this->updateIndexSettings($tenantIndexName, $settings);
+        }
+    }
+
+    /**
+     * Update settings for a specific index.
+     */
+    private function updateIndexSettings(string $indexName, array $settings): void
+    {
+        try {
+            $this->meilisearchClient->updateSettings($indexName, $settings);
+            Log::info("Synced settings for index: {$indexName}");
+        } catch (\Exception $e) {
+            Log::error("Failed to sync settings for index: {$indexName}", [
+                'error' => $e->getMessage()
+            ]);
+            
+            throw new \RuntimeException("Sync settings failed for {$indexName}: {$e->getMessage()}", 0, $e);
         }
     }
 
@@ -231,7 +297,7 @@ class SearchIndexManager
         $versionKeyPrefix = $this->config['cache']['version_key_prefix'] ?? 'gs:index:';
         
         try {
-            cache()->store($cacheStore)->increment($versionKeyPrefix . $indexName);
+            Cache::store($cacheStore)->increment($versionKeyPrefix . $indexName);
         } catch (\Exception $e) {
             Log::warning("Failed to increment version for index: {$indexName}", [
                 'error' => $e->getMessage()

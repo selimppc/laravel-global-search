@@ -7,7 +7,11 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\Response;
+use Illuminate\Support\Facades\Config;
 use LaravelGlobalSearch\GlobalSearch\Services\GlobalSearchService;
+use LaravelGlobalSearch\GlobalSearch\Contracts\TenantResolver;
 
 /**
  * Controller for handling global search API requests.
@@ -17,38 +21,44 @@ class GlobalSearchController extends Controller
     /**
      * Handle the global search request.
      */
-    public function __invoke(Request $request, GlobalSearchService $searchService): JsonResponse
+    public function __invoke(Request $request, GlobalSearchService $searchService, TenantResolver $tenantResolver): JsonResponse
     {
         try {
             $validatedData = $this->validateRequest($request);
             
+            // Get tenant context
+            $tenantId = $validatedData['tenant'] ?? $tenantResolver->getCurrentTenant();
+            
             $results = $searchService->search(
                 $validatedData['query'],
                 $validatedData['filters'],
-                $validatedData['limit']
+                $validatedData['limit'],
+                $tenantId
             );
 
-            return response()->json([
+            return Response::json([
                 'success' => true,
                 'data' => $results,
                 'meta' => [
                     'query' => $validatedData['query'],
                     'limit' => $validatedData['limit'],
                     'filters' => $validatedData['filters'],
+                    'tenant' => $tenantId,
                 ]
             ]);
 
         } catch (\Exception $e) {
             Log::error('Global search request failed', [
                 'query' => $request->get('q'),
+                'tenant' => $request->get('tenant'),
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
+            return Response::json([
                 'success' => false,
                 'message' => 'Search request failed',
-                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+                'error' => Config::get('app.debug') ? $e->getMessage() : 'Internal server error'
             ], 500);
         }
     }
@@ -63,6 +73,7 @@ class GlobalSearchController extends Controller
             'filters' => 'sometimes|array',
             'filters.*' => 'string',
             'limit' => 'sometimes|integer|min:1|max:100',
+            'tenant' => 'sometimes|string|max:255',
         ], [
             'q.required' => 'Search query is required',
             'q.string' => 'Search query must be a string',
@@ -72,6 +83,8 @@ class GlobalSearchController extends Controller
             'limit.integer' => 'Limit must be an integer',
             'limit.min' => 'Limit must be at least 1',
             'limit.max' => 'Limit cannot exceed 100',
+            'tenant.string' => 'Tenant must be a string',
+            'tenant.max' => 'Tenant cannot exceed 255 characters',
         ]);
 
         if ($validator->fails()) {
@@ -80,9 +93,10 @@ class GlobalSearchController extends Controller
 
         $query = trim($request->get('q', ''));
         $filters = $request->get('filters', []);
+        $tenant = $request->get('tenant');
         
-        $defaultLimit = config('global-search.federation.default_limit', 10);
-        $maxLimit = config('global-search.federation.max_limit', 50);
+        $defaultLimit = Config::get('global-search.federation.default_limit', 10);
+        $maxLimit = Config::get('global-search.federation.max_limit', 50);
         $requestedLimit = (int) $request->get('limit', $defaultLimit);
         
         $limit = min($requestedLimit, $maxLimit);
@@ -91,6 +105,7 @@ class GlobalSearchController extends Controller
             'query' => $query,
             'filters' => $filters,
             'limit' => $limit,
+            'tenant' => $tenant,
         ];
     }
 }

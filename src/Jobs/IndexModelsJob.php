@@ -31,7 +31,8 @@ class IndexModelsJob implements ShouldQueue
      * Create a new job instance.
      */
     public function __construct(
-        public array $modelPayload
+        public array $modelPayload,
+        public ?string $tenantId = null
     ) {}
 
     /**
@@ -41,17 +42,19 @@ class IndexModelsJob implements ShouldQueue
     {
         foreach ($this->modelPayload as $modelClass => $modelIds) {
             try {
-                $indexManager->indexModels($modelClass, array_values($modelIds));
+                $indexManager->indexModels($modelClass, array_values($modelIds), $this->tenantId);
                 
                 Log::info('Successfully indexed models', [
                     'model_class' => $modelClass,
-                    'model_count' => count($modelIds)
+                    'model_count' => count($modelIds),
+                    'tenant' => $this->tenantId
                 ]);
                 
             } catch (\Exception $e) {
                 Log::error('Failed to index models', [
                     'model_class' => $modelClass,
                     'model_ids' => $modelIds,
+                    'tenant' => $this->tenantId,
                     'error' => $e->getMessage()
                 ]);
                 
@@ -68,6 +71,7 @@ class IndexModelsJob implements ShouldQueue
     {
         Log::error('IndexModelsJob failed permanently', [
             'model_payload' => $this->modelPayload,
+            'tenant' => $this->tenantId,
             'error' => $exception->getMessage()
         ]);
     }

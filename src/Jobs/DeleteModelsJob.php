@@ -31,7 +31,8 @@ class DeleteModelsJob implements ShouldQueue
      * Create a new job instance.
      */
     public function __construct(
-        public array $modelPayload
+        public array $modelPayload,
+        public ?string $tenantId = null
     ) {}
 
     /**
@@ -41,17 +42,19 @@ class DeleteModelsJob implements ShouldQueue
     {
         foreach ($this->modelPayload as $modelClass => $modelIds) {
             try {
-                $indexManager->deleteModels($modelClass, array_values($modelIds));
+                $indexManager->deleteModels($modelClass, array_values($modelIds), $this->tenantId);
                 
                 Log::info('Successfully deleted models from search index', [
                     'model_class' => $modelClass,
-                    'model_count' => count($modelIds)
+                    'model_count' => count($modelIds),
+                    'tenant' => $this->tenantId
                 ]);
                 
             } catch (\Exception $e) {
                 Log::error('Failed to delete models from search index', [
                     'model_class' => $modelClass,
                     'model_ids' => $modelIds,
+                    'tenant' => $this->tenantId,
                     'error' => $e->getMessage()
                 ]);
                 
@@ -68,6 +71,7 @@ class DeleteModelsJob implements ShouldQueue
     {
         Log::error('DeleteModelsJob failed permanently', [
             'model_payload' => $this->modelPayload,
+            'tenant' => $this->tenantId,
             'error' => $exception->getMessage()
         ]);
     }

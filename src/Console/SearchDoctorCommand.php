@@ -5,6 +5,8 @@ namespace LaravelGlobalSearch\GlobalSearch\Console;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Bus;
 use LaravelGlobalSearch\GlobalSearch\Support\MeilisearchClient;
 
 /**
@@ -50,7 +52,7 @@ class SearchDoctorCommand extends Command
         // Display results
         $this->displayResults($issues, $warnings);
 
-        return empty($issues) ? self::SUCCESS : self::FAILURE;
+        return empty($issues) ? Command::SUCCESS : Command::FAILURE;
     }
 
     /**
@@ -60,7 +62,7 @@ class SearchDoctorCommand extends Command
     {
         $this->info('📋 Checking configuration...');
         
-        $config = config('global-search');
+        $config = Config::get('global-search');
         
         if (empty($config)) {
             $issues[] = 'Global search configuration not found. Run: php artisan vendor:publish --tag=global-search-config';
@@ -159,7 +161,7 @@ class SearchDoctorCommand extends Command
         try {
             // Test if we can dispatch a job
             $testJob = new \LaravelGlobalSearch\GlobalSearch\Jobs\IndexModelsJob([]);
-            dispatch($testJob)->onQueue($queue);
+            Bus::dispatch($testJob)->onQueue($queue);
             
             $this->info("   ✅ Queue '{$queue}' is configured");
         } catch (\Exception $e) {
