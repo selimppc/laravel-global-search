@@ -65,6 +65,114 @@ $results = User::search('john doe');
 $results = app('global-search')->search('john doe');
 ```
 
+## 🔄 Data Transformation
+
+The package provides flexible data transformation capabilities for complex real-world scenarios:
+
+### **Automatic Transformation (Default)**
+```php
+// Simple models work automatically
+class User extends Model
+{
+    use Searchable;
+    
+    // Package automatically transforms: id, name, email, created_at
+}
+```
+
+### **Custom Transformation Methods**
+```php
+class User extends Model
+{
+    use Searchable;
+    
+    // Custom transformation method
+    public function toSearchableArray(): array
+    {
+        return [
+            'id' => $this->id,
+            'name' => $this->name,
+            'email' => $this->email,
+            'full_name' => $this->first_name . ' ' . $this->last_name,
+            'initials' => strtoupper(substr($this->first_name, 0, 1) . substr($this->last_name, 0, 1)),
+            'avatar_url' => $this->avatar ? asset('storage/' . $this->avatar) : null,
+            'is_active' => $this->status === 1,
+            'search_text' => $this->name . ' ' . $this->email . ' ' . $this->phone,
+        ];
+    }
+}
+```
+
+### **Configuration-Based Transformation**
+```php
+// In config/global-search.php
+'mappings' => [
+    [
+        'model' => App\Models\User::class,
+        'index' => 'users',
+        'fields' => ['id', 'name', 'email', 'phone'],
+        'transformations' => [
+            'email' => 'email',        // Validate email format
+            'phone' => 'phone',        // Format phone number
+            'created_at' => 'date',    // Convert to ISO date
+        ],
+        'computed' => [
+            'full_name' => function($model) {
+                return $model->first_name . ' ' . $model->last_name;
+            },
+            'avatar_url' => function($model) {
+                return $model->avatar ? asset('storage/' . $model->avatar) : null;
+            },
+        ],
+        'relationships' => [
+            'roles' => [
+                'fields' => ['id', 'name', 'slug'],
+                'max_items' => 5,
+            ],
+        ],
+    ],
+],
+```
+
+### **Custom Data Transformers (Advanced)**
+```php
+// Create custom transformer for complex models
+class UserDataTransformer implements DataTransformer
+{
+    public function transform($model, ?string $tenant = null): array
+    {
+        return [
+            'id' => $model->id,
+            'name' => $model->name,
+            'email' => $model->email,
+            'full_name' => $this->buildFullName($model),
+            'initials' => $this->getInitials($model),
+            'avatar_url' => $this->getAvatarUrl($model),
+            'roles' => $model->roles->pluck('name')->toArray(),
+            'search_text' => $this->buildSearchText($model),
+        ];
+    }
+    
+    // ... other required methods
+}
+
+// Register the transformer
+app(DataTransformerManager::class)->registerTransformer(
+    User::class, 
+    new UserDataTransformer()
+);
+```
+
+### **Built-in Transformation Types**
+- **`email`**: Validates email format
+- **`phone`**: Formats phone numbers  
+- **`date`**: Converts to ISO date format
+- **`currency`**: Formats currency values
+- **`html`**: Strips HTML tags
+- **`json`**: Parses JSON strings
+- **`slug`**: Creates URL-friendly slugs
+- **`url`**: Validates and formats URLs
+
 ### 6. Add Search API Route
 
 ```php
@@ -304,6 +412,104 @@ php artisan search:health
 
 # Check performance metrics
 php artisan search:performance
+```
+
+## 🔄 Data Transformation
+
+The package provides flexible data transformation capabilities for complex real-world scenarios:
+
+### **Basic Transformation (Automatic)**
+```php
+// Simple models work automatically
+class User extends Model
+{
+    use Searchable;
+    
+    // Package automatically transforms: id, name, email, created_at
+}
+```
+
+### **Custom Transformation Methods**
+```php
+class User extends Model
+{
+    use Searchable;
+    
+    // Custom transformation method
+    public function toSearchableArray(): array
+    {
+        return [
+            'id' => $this->id,
+            'name' => $this->name,
+            'email' => $this->email,
+            'full_name' => $this->first_name . ' ' . $this->last_name,
+            'initials' => strtoupper(substr($this->first_name, 0, 1) . substr($this->last_name, 0, 1)),
+            'avatar_url' => $this->avatar ? asset('storage/' . $this->avatar) : null,
+            'is_active' => $this->status === 1,
+            'search_text' => $this->name . ' ' . $this->email . ' ' . $this->phone,
+        ];
+    }
+}
+```
+
+### **Advanced Configuration-Based Transformation**
+```php
+// In config/global-search.php
+'mappings' => [
+    [
+        'model' => App\Models\User::class,
+        'index' => 'users',
+        'fields' => ['id', 'name', 'email', 'phone'],
+        'transformations' => [
+            'email' => 'email',        // Validate email format
+            'phone' => 'phone',        // Format phone number
+            'created_at' => 'date',    // Convert to ISO date
+        ],
+        'computed' => [
+            'full_name' => function($model) {
+                return $model->first_name . ' ' . $model->last_name;
+            },
+            'avatar_url' => function($model) {
+                return $model->avatar ? asset('storage/' . $model->avatar) : null;
+            },
+        ],
+        'relationships' => [
+            'roles' => [
+                'fields' => ['id', 'name', 'slug'],
+                'max_items' => 5,
+            ],
+        ],
+    ],
+],
+```
+
+### **Custom Data Transformers**
+```php
+// Create custom transformer for complex models
+class UserDataTransformer implements DataTransformer
+{
+    public function transform($model, ?string $tenant = null): array
+    {
+        return [
+            'id' => $model->id,
+            'name' => $model->name,
+            'email' => $model->email,
+            'full_name' => $model->first_name . ' ' . $model->last_name,
+            'initials' => $this->getInitials($model),
+            'avatar_url' => $this->getAvatarUrl($model),
+            'roles' => $model->roles->pluck('name')->toArray(),
+            'search_text' => $this->buildSearchText($model),
+        ];
+    }
+    
+    // ... other required methods
+}
+
+// Register the transformer
+app(DataTransformerManager::class)->registerTransformer(
+    User::class, 
+    new UserDataTransformer()
+);
 ```
 
 ## 🔍 How It Works

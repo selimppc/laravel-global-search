@@ -39,6 +39,10 @@ class GlobalSearchServiceProvider extends ServiceProvider
         ));
         
         $this->app->singleton(\LaravelGlobalSearch\GlobalSearch\Services\PerformanceMonitor::class);
+        
+        $this->app->singleton(\LaravelGlobalSearch\GlobalSearch\Support\DataTransformerManager::class, fn($app) => 
+            new \LaravelGlobalSearch\GlobalSearch\Support\DataTransformerManager($app['config']['global-search'])
+        );
     }
 
     public function boot(): void

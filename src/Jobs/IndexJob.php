@@ -10,6 +10,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Log;
 use LaravelGlobalSearch\GlobalSearch\Support\TenantResolver;
+use LaravelGlobalSearch\GlobalSearch\Support\DataTransformerManager;
 use Meilisearch\Client;
 
 /**
@@ -27,7 +28,7 @@ class IndexJob implements ShouldQueue
         $this->onQueue('search');
     }
 
-    public function handle(TenantResolver $tenantResolver): void
+    public function handle(TenantResolver $tenantResolver, DataTransformerManager $transformerManager): void
     {
         try {
             $tenant = $this->tenant ?? $tenantResolver->getCurrentTenant();
@@ -53,8 +54,8 @@ class IndexJob implements ShouldQueue
                     continue;
                 }
 
-                // Transform models to documents
-                $chunkDocuments = $models->map(fn($model) => $this->transformModel($model, $tenant))->toArray();
+                // Transform models to documents using transformer manager
+                $chunkDocuments = $models->map(fn($model) => $transformerManager->transform($model, $tenant))->toArray();
                 $documents = array_merge($documents, $chunkDocuments);
                 
                 // Free memory
@@ -88,21 +89,6 @@ class IndexJob implements ShouldQueue
         }
     }
 
-    private function transformModel($model, ?string $tenant): array
-    {
-        $data = $model->toArray();
-        
-        // Add tenant context automatically
-        if ($tenant) {
-            $data['tenant_id'] = $tenant;
-        }
-        
-        // Add computed fields
-        $data['url'] = $this->generateUrl($model);
-        $data['type'] = class_basename($model);
-        
-        return $data;
-    }
 
     private function generateUrl($model): string
     {
