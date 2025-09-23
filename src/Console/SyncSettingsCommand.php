@@ -48,10 +48,30 @@ class SyncSettingsCommand extends Command
     
     private function syncIndexSettings(Client $client, array $config, ?string $tenant, TenantResolver $tenantResolver): void
     {
-        $indexName = $tenantResolver->getTenantIndexName($config['index_name'], $tenant);
-        $settings = $config['index_settings'] ?? [];
+        $indexes = array_keys($config['federation']['indexes'] ?? []);
         
-        $client->index($indexName)->updateSettings($settings);
-        $this->line("✓ Synced settings for index: {$indexName}");
+        foreach ($indexes as $indexName) {
+            $tenantIndexName = $tenantResolver->getTenantIndexName($indexName);
+            
+            // Get settings for this specific index from mappings
+            $settings = $this->getIndexSettings($config, $indexName);
+            if (!empty($settings)) {
+                $client->index($tenantIndexName)->updateSettings($settings);
+                $this->line("✓ Synced settings for index: {$tenantIndexName}");
+            } else {
+                $this->line("⚠ No settings found for index: {$indexName}");
+            }
+        }
+    }
+    
+    private function getIndexSettings(array $config, string $indexName): array
+    {
+        $mappings = $config['mappings'] ?? [];
+        foreach ($mappings as $mapping) {
+            if (strtolower(class_basename($mapping['model'])) === $indexName) {
+                return $mapping['index_settings'] ?? [];
+            }
+        }
+        return [];
     }
 }

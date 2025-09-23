@@ -82,18 +82,33 @@ class HealthCommand extends Command
         try {
             $client = App::make(Client::class);
             $config = App::make('config')->get('global-search');
-            $indexName = $tenantResolver->getTenantIndexName($config['index_name'], $tenant);
+            $indexes = array_keys($config['federation']['indexes'] ?? []);
             
-            $stats = $client->index($indexName)->getStats();
-            
-            $this->info("<info>✅</info> Tenant '{$tenant}': Healthy");
-            if ($detailed) {
-                $this->line("   Index: {$indexName}");
-                $this->line("   Documents: {$stats['numberOfDocuments']}");
-                $this->line("   Size: " . $this->formatBytes($stats['databaseSize']));
+            $allHealthy = true;
+            foreach ($indexes as $indexName) {
+                $tenantIndexName = $tenantResolver->getTenantIndexName($indexName);
+                
+                try {
+                    $stats = $client->index($tenantIndexName)->getStats();
+                    
+                    if ($detailed) {
+                        $this->line("   Index: {$tenantIndexName}");
+                        $this->line("   Documents: {$stats['numberOfDocuments']}");
+                        $this->line("   Size: " . $this->formatBytes($stats['databaseSize']));
+                    }
+                } catch (\Exception $e) {
+                    $this->error("   Index {$tenantIndexName}: {$e->getMessage()}");
+                    $allHealthy = false;
+                }
             }
             
-            return true;
+            if ($allHealthy) {
+                $this->info("<info>✅</info> Tenant '{$tenant}': Healthy");
+            } else {
+                $this->error("<error>❌</error> Tenant '{$tenant}': Some indexes failed");
+            }
+            
+            return $allHealthy;
         } catch (\Exception $e) {
             $this->error("<error>❌</error> Tenant '{$tenant}': Failed");
             $this->error("   Error: {$e->getMessage()}");

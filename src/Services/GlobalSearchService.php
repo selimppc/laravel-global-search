@@ -178,29 +178,50 @@ class GlobalSearchService
     public function flushAll(?string $tenant = null): void
     {
         $tenant = $tenant ?? $this->tenantResolver->getCurrentTenant();
-        $indexName = $this->tenantResolver->getTenantIndexName($this->config['index_name']);
+        $indexes = array_keys($this->config['federation']['indexes'] ?? []);
 
         try {
             $client = App::make(Client::class);
-            $client->index($indexName)->deleteAllDocuments();
-            Log::info("Flushed index: {$indexName}");
+            foreach ($indexes as $indexName) {
+                $tenantIndexName = $this->tenantResolver->getTenantIndexName($indexName);
+                $client->index($tenantIndexName)->deleteAllDocuments();
+                Log::info("Flushed index: {$tenantIndexName}");
+            }
         } catch (\Exception $e) {
-            Log::error("Failed to flush index {$indexName}: {$e->getMessage()}", ['exception' => $e]);
+            Log::error("Failed to flush indexes: {$e->getMessage()}", ['exception' => $e]);
         }
     }
 
     public function syncSettings(?string $tenant = null): void
     {
         $tenant = $tenant ?? $this->tenantResolver->getCurrentTenant();
-        $indexName = $this->tenantResolver->getTenantIndexName($this->config['index_name']);
+        $indexes = array_keys($this->config['federation']['indexes'] ?? []);
 
         try {
             $client = App::make(Client::class);
-            $settings = $this->config['index_settings'] ?? [];
-            $client->index($indexName)->updateSettings($settings);
-            Log::info("Synced settings for index: {$indexName}");
+            foreach ($indexes as $indexName) {
+                $tenantIndexName = $this->tenantResolver->getTenantIndexName($indexName);
+                
+                // Get settings for this specific index from mappings
+                $settings = $this->getIndexSettings($indexName);
+                if (!empty($settings)) {
+                    $client->index($tenantIndexName)->updateSettings($settings);
+                    Log::info("Synced settings for index: {$tenantIndexName}");
+                }
+            }
         } catch (\Exception $e) {
-            Log::error("Failed to sync settings for index {$indexName}: {$e->getMessage()}", ['exception' => $e]);
+            Log::error("Failed to sync settings: {$e->getMessage()}", ['exception' => $e]);
         }
+    }
+
+    private function getIndexSettings(string $indexName): array
+    {
+        $mappings = $this->config['mappings'] ?? [];
+        foreach ($mappings as $mapping) {
+            if (strtolower(class_basename($mapping['model'])) === $indexName) {
+                return $mapping['index_settings'] ?? [];
+            }
+        }
+        return [];
     }
 }
