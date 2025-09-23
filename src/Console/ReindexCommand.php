@@ -55,7 +55,37 @@ class ReindexCommand extends Command
         }
 
         $this->info("Starting reindex for tenant: " . ($tenant ?? 'default'));
+        
+        // Get configuration to show what will be indexed
+        $config = app('config')->get('global-search');
+        $mappings = $config['mappings'] ?? [];
+        
+        if (empty($mappings)) {
+            $this->warn('No model mappings found in configuration. Nothing to reindex.');
+            return;
+        }
+        
+        $this->info('Models to be indexed:');
+        foreach ($mappings as $mapping) {
+            $modelClass = $mapping['model'];
+            if (class_exists($modelClass)) {
+                $count = $modelClass::count();
+                $this->line("  - {$modelClass}: {$count} records");
+            } else {
+                $this->warn("  - {$modelClass}: Class not found (skipped)");
+            }
+        }
+        
+        $this->newLine();
+        $this->info('Dispatching reindex jobs...');
+        
         $searchService->reindexAll($tenant);
-        $this->info('Reindex jobs dispatched successfully!');
+        
+        $this->info('✅ Reindex jobs dispatched successfully!');
+        $this->newLine();
+        $this->info('💡 To monitor progress:');
+        $this->line('  - Check queue: php artisan queue:work');
+        $this->line('  - Check logs: tail -f storage/logs/laravel.log');
+        $this->line('  - Check health: php artisan search:health');
     }
 }

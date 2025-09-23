@@ -268,6 +268,12 @@ php artisan search:flush
 # Flush specific tenant
 php artisan search:flush tenant1
 
+# Check index status
+php artisan search:status
+
+# Check index status with details
+php artisan search:status --detailed
+
 # Check system health
 php artisan search:health
 ```

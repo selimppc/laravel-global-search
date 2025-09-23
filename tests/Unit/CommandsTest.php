@@ -7,6 +7,7 @@ use LaravelGlobalSearch\GlobalSearch\Console\ReindexCommand;
 use LaravelGlobalSearch\GlobalSearch\Console\ReindexTenantCommand;
 use LaravelGlobalSearch\GlobalSearch\Console\SyncSettingsCommand;
 use LaravelGlobalSearch\GlobalSearch\Console\FlushCommand;
+use LaravelGlobalSearch\GlobalSearch\Console\StatusCommand;
 use LaravelGlobalSearch\GlobalSearch\Console\HealthCommand;
 
 class CommandsTest extends TestCase
@@ -43,6 +44,14 @@ class CommandsTest extends TestCase
         $this->assertEquals('search:flush', $command->getName());
     }
 
+    public function test_status_command_exists()
+    {
+        $this->assertTrue(class_exists(StatusCommand::class));
+        
+        $command = new StatusCommand();
+        $this->assertEquals('search:status', $command->getName());
+    }
+
     public function test_health_command_exists()
     {
         $this->assertTrue(class_exists(HealthCommand::class));
@@ -58,6 +67,7 @@ class CommandsTest extends TestCase
         $this->assertInstanceOf(ReindexTenantCommand::class, new ReindexTenantCommand());
         $this->assertInstanceOf(SyncSettingsCommand::class, new SyncSettingsCommand());
         $this->assertInstanceOf(FlushCommand::class, new FlushCommand());
+        $this->assertInstanceOf(StatusCommand::class, new StatusCommand());
         $this->assertInstanceOf(HealthCommand::class, new HealthCommand());
     }
 }

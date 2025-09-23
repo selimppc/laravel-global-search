@@ -12,6 +12,7 @@ use LaravelGlobalSearch\GlobalSearch\Console\ReindexCommand;
 use LaravelGlobalSearch\GlobalSearch\Console\ReindexTenantCommand;
 use LaravelGlobalSearch\GlobalSearch\Console\SyncSettingsCommand;
 use LaravelGlobalSearch\GlobalSearch\Console\FlushCommand;
+use LaravelGlobalSearch\GlobalSearch\Console\StatusCommand;
 use LaravelGlobalSearch\GlobalSearch\Console\HealthCommand;
 
 /**
@@ -66,6 +67,7 @@ class GlobalSearchServiceProvider extends ServiceProvider
                 ReindexTenantCommand::class,
                 SyncSettingsCommand::class,
                 FlushCommand::class,
+                StatusCommand::class,
                 HealthCommand::class,
             ]);
         }
