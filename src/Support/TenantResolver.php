@@ -16,6 +16,20 @@ class TenantResolver
 
     public function getCurrentTenant(): ?string
     {
+        // First try to get tenant from Stancl/Tenancy if available
+        if (class_exists('Stancl\Tenancy\Tenancy')) {
+            try {
+                $tenancy = app('Stancl\Tenancy\Tenancy');
+                if ($tenancy->tenant) {
+                    // Get tenant name from Stancl/Tenancy tenant
+                    $tenant = $tenancy->tenant;
+                    return $tenant->name ?? $tenant->id ?? null;
+                }
+            } catch (\Exception $e) {
+                // Fall back to our own resolution
+            }
+        }
+
         // Try multiple strategies automatically
         return $this->trySubdomain() 
             ?? $this->tryHeader() 
@@ -97,8 +111,11 @@ class TenantResolver
             $model = $this->config['tenant']['model'] ?? null;
             if (!$model || !class_exists($model)) return null;
 
-            $identifier = $this->config['tenant']['identifier_column'] ?? 'id';
-            return $model::pluck($identifier)->toArray();
+            $identifier = $this->config['tenant']['identifier_column'] ?? 'name';
+            
+            // Try to get a meaningful identifier, fallback to id if needed
+            $tenants = $model::select($identifier)->get();
+            return $tenants->pluck($identifier)->filter()->toArray();
         } catch (\Exception $e) {
             Log::error('Failed to get tenants from database', ['error' => $e->getMessage()]);
             return null;

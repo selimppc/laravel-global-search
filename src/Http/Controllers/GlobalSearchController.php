@@ -30,7 +30,7 @@ class GlobalSearchController
             'meta' => [
                 'query' => $query,
                 'limit' => $limit,
-                'tenant' => $tenant
+                'tenant' => $results['meta']['tenant'] ?? $tenant
             ]
         ]);
     }
