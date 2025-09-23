@@ -32,11 +32,6 @@ class IndexJob implements ShouldQueue
         try {
             $tenant = $this->tenant ?? $tenantResolver->getCurrentTenant();
             
-            // Normalize tenant name to be Meilisearch-compatible
-            if ($tenant) {
-                $tenant = strtolower(str_replace(' ', '-', $tenant));
-            }
-            
             // Tenant context should already be initialized globally
             // No need to manually initialize it here
             
@@ -104,12 +99,26 @@ class IndexJob implements ShouldQueue
 
     private function getIndexName(?string $tenant): string
     {
-        $baseIndex = strtolower(class_basename($this->modelClass));
+        // Get the correct index name from configuration
+        $config = app('config')->get('global-search');
+        $mappings = $config['mappings'] ?? [];
+        
+        // Find the mapping for this model class
+        foreach ($mappings as $mapping) {
+            if ($mapping['model'] === $this->modelClass) {
+                $baseIndex = $mapping['index'];
+                break;
+            }
+        }
+        
+        // Fallback to class name if no mapping found
+        if (!isset($baseIndex)) {
+            $baseIndex = strtolower(class_basename($this->modelClass));
+        }
         
         if ($tenant) {
-            // Normalize tenant name to be Meilisearch-compatible
-            $normalizedTenant = strtolower(str_replace(' ', '-', $tenant));
-            return "{$baseIndex}_{$normalizedTenant}";
+            // Use tenant ID directly for proper multi-tenant isolation
+            return "{$baseIndex}_{$tenant}";
         }
         
         return $baseIndex;

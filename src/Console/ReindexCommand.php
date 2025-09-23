@@ -107,7 +107,11 @@ class ReindexCommand extends Command
         $this->newLine();
         $this->info('Dispatching reindex jobs...');
         
-        $searchService->reindexAll(null);
+        // Get current tenant for proper context
+        $tenantResolver = app('LaravelGlobalSearch\GlobalSearch\Support\TenantResolver');
+        $currentTenant = $tenantResolver->getCurrentTenant();
+        
+        $searchService->reindexAll($currentTenant);
         
         $this->info('✅ Reindex jobs dispatched successfully!');
         $this->newLine();

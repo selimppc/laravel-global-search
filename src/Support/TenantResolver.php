@@ -21,15 +21,10 @@ class TenantResolver
             try {
                 $tenancy = app('Stancl\Tenancy\Tenancy');
                 if ($tenancy->tenant) {
-                    // Get tenant name from Stancl/Tenancy tenant
+                    // Get tenant ID from Stancl/Tenancy tenant
                     $tenant = $tenancy->tenant;
-                    // Prefer name over id for better readability
-                    $tenantName = $tenant->name ?? $tenant->id ?? null;
-                    if ($tenantName) {
-                        // Normalize tenant name to lowercase with hyphens
-                        return strtolower(str_replace(' ', '-', $tenantName));
-                    }
-                    return null;
+                    // Use tenant ID for proper multi-tenant isolation
+                    return $tenant->id ?? null;
                 }
             } catch (\Exception $e) {
                 // Fall back to our own resolution

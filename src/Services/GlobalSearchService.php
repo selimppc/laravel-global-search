@@ -159,7 +159,11 @@ class GlobalSearchService
 
     private function getIndexes(): array
     {
-        return array_keys($this->config['federation']['indexes'] ?? []);
+        // Get indexes from federation config or mappings
+        $federationIndexes = array_keys($this->config['federation']['indexes'] ?? []);
+        $mappingIndexes = array_column($this->config['mappings'] ?? [], 'index');
+        
+        return array_unique(array_merge($federationIndexes, $mappingIndexes));
     }
 
     private function buildSearchOptions(array $filters, int $limit, ?string $tenant): array
@@ -170,11 +174,8 @@ class GlobalSearchService
             $options['filter'] = $this->buildFilterString($filters);
         }
         
-        if ($tenant && $this->tenantResolver->isMultiTenant()) {
-            $existingFilter = $options['filter'] ?? '';
-            $tenantFilter = "tenant_id = {$tenant}";
-            $options['filter'] = $existingFilter ? "({$existingFilter}) AND ({$tenantFilter})" : $tenantFilter;
-        }
+        // Don't add tenant filter when using tenant-specific indexes
+        // Each tenant has its own index, so no need to filter by tenant_id
         
         return $options;
     }
