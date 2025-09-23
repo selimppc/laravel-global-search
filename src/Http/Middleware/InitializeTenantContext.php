@@ -45,7 +45,10 @@ class InitializeTenantContext
         $host = $request->getHost();
         $parts = explode('.', $host);
         
-        if (count($parts) < 2) return null;
+        // If it's an IP address (like 127.0.0.1), return null
+        if (count($parts) < 2 || filter_var($host, FILTER_VALIDATE_IP)) {
+            return null;
+        }
         
         $subdomain = $parts[0];
         $exclude = ['www', 'api', 'admin', 'app', 'localhost', '127.0.0.1'];

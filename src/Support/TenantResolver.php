@@ -45,15 +45,17 @@ class TenantResolver
         $subdomain = $this->trySubdomain();
         $header = $this->tryHeader();
         $route = $this->tryRoute();
+        $query = $this->tryQuery();
         $auth = $this->tryAuth();
         $default = $this->tryDefault();
         
-        $tenantId = $subdomain ?? $header ?? $route ?? $auth ?? $default;
+        $tenantId = $subdomain ?? $header ?? $route ?? $query ?? $auth ?? $default;
         
         Log::debug("Tenant resolution attempt", [
             'subdomain' => $subdomain,
             'header' => $header,
             'route' => $route,
+            'query' => $query,
             'auth' => $auth,
             'default' => $default,
             'final' => $tenantId
@@ -103,7 +105,10 @@ class TenantResolver
         $host = request()->getHost();
         $parts = explode('.', $host);
         
-        if (count($parts) < 2) return null;
+        // If it's an IP address (like 127.0.0.1), return null
+        if (count($parts) < 2 || filter_var($host, FILTER_VALIDATE_IP)) {
+            return null;
+        }
         
         $subdomain = $parts[0];
         $exclude = ['www', 'api', 'admin', 'app', 'localhost', '127.0.0.1'];
@@ -124,6 +129,11 @@ class TenantResolver
     {
         return request()->route('tenant') 
             ?? request()->route('domain');
+    }
+
+    private function tryQuery(): ?string
+    {
+        return request()->get('tenant');
     }
 
     private function tryAuth(): ?string
