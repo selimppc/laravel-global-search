@@ -100,7 +100,14 @@ class IndexJob implements ShouldQueue
     private function getIndexName(?string $tenant): string
     {
         $baseIndex = strtolower(class_basename($this->modelClass));
-        return $tenant ? "{$baseIndex}_{$tenant}" : $baseIndex;
+        
+        if ($tenant) {
+            // Normalize tenant name to be Meilisearch-compatible
+            $normalizedTenant = strtolower(str_replace(' ', '-', $tenant));
+            return "{$baseIndex}_{$normalizedTenant}";
+        }
+        
+        return $baseIndex;
     }
     
     private function needsTenantInitialization(): bool
