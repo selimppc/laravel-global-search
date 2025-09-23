@@ -32,6 +32,11 @@ class IndexJob implements ShouldQueue
         try {
             $tenant = $this->tenant ?? $tenantResolver->getCurrentTenant();
             
+            // Normalize tenant name to be Meilisearch-compatible
+            if ($tenant) {
+                $tenant = strtolower(str_replace(' ', '-', $tenant));
+            }
+            
             // Tenant context should already be initialized globally
             // No need to manually initialize it here
             
