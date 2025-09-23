@@ -10,6 +10,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Log;
 use LaravelGlobalSearch\GlobalSearch\Support\TenantResolver;
+use Meilisearch\Client;
 
 /**
  * Modern, efficient deletion job for scale.

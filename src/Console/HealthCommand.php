@@ -54,9 +54,10 @@ class HealthCommand extends Command
     {
         try {
             $client = App::make(Client::class);
-            $health = $client->health()->get();
+            $health = $client->health();
             
-            if ($health['status'] === 'healthy') {
+            // The health() method returns an array with status information
+            if (is_array($health) && isset($health['status']) && $health['status'] === 'available') {
                 $this->info('<info>✅</info> Meilisearch connection: Healthy');
                 if ($detailed) {
                     $this->line("   Status: {$health['status']}");
@@ -67,12 +68,16 @@ class HealthCommand extends Command
                 return true;
             } else {
                 $this->error('<error>❌</error> Meilisearch connection: Unhealthy');
-                $this->error("   Status: {$health['status']}");
+                if ($detailed) {
+                    $this->line("   Status: " . (is_array($health) ? ($health['status'] ?? 'unknown') : 'unknown'));
+                }
                 return false;
             }
         } catch (\Exception $e) {
             $this->error('<error>❌</error> Meilisearch connection: Failed');
-            $this->error("   Error: {$e->getMessage()}");
+            if ($detailed) {
+                $this->line("   Error: {$e->getMessage()}");
+            }
             return false;
         }
     }
@@ -89,12 +94,12 @@ class HealthCommand extends Command
                 $tenantIndexName = $tenantResolver->getTenantIndexName($indexName);
                 
                 try {
-                    $stats = $client->index($tenantIndexName)->getStats();
+                    $index = $client->index($tenantIndexName);
+                    // Just check if we can access the index - this will throw if it doesn't exist
+                    $index->getSettings();
                     
                     if ($detailed) {
-                        $this->line("   Index: {$tenantIndexName}");
-                        $this->line("   Documents: {$stats['numberOfDocuments']}");
-                        $this->line("   Size: " . $this->formatBytes($stats['databaseSize']));
+                        $this->line("   Index: {$tenantIndexName} (exists)");
                     }
                 } catch (\Exception $e) {
                     $this->error("   Index {$tenantIndexName}: {$e->getMessage()}");

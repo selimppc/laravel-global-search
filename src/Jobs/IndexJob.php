@@ -10,6 +10,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Log;
 use LaravelGlobalSearch\GlobalSearch\Support\TenantResolver;
+use Meilisearch\Client;
 
 /**
  * Modern, efficient indexing job for scale.
@@ -89,7 +90,7 @@ class IndexJob implements ShouldQueue
     {
         $routeName = strtolower(class_basename($model)) . '.show';
         
-        if (route()->has($routeName)) {
+        if (app('router')->has($routeName)) {
             return route($routeName, $model->id);
         }
         
