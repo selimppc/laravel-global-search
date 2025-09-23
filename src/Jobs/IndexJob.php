@@ -51,7 +51,8 @@ class IndexJob implements ShouldQueue
             $indexName = $this->getIndexName($tenant);
             
             // Index documents
-            $client->addDocuments($indexName, $documents);
+            $index = $client->index($indexName);
+            $index->addDocuments($documents);
             
         } catch (\Exception $e) {
             Log::error('Indexing job failed', [

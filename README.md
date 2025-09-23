@@ -262,6 +262,12 @@ php artisan search:reindex-tenant tenant1
 # Sync index settings
 php artisan search:sync-settings
 
+# Flush all documents
+php artisan search:flush
+
+# Flush specific tenant
+php artisan search:flush tenant1
+
 # Check system health
 php artisan search:health
 ```

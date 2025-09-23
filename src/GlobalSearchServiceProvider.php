@@ -11,6 +11,7 @@ use LaravelGlobalSearch\GlobalSearch\Http\Controllers\GlobalSearchController;
 use LaravelGlobalSearch\GlobalSearch\Console\ReindexCommand;
 use LaravelGlobalSearch\GlobalSearch\Console\ReindexTenantCommand;
 use LaravelGlobalSearch\GlobalSearch\Console\SyncSettingsCommand;
+use LaravelGlobalSearch\GlobalSearch\Console\FlushCommand;
 use LaravelGlobalSearch\GlobalSearch\Console\HealthCommand;
 
 /**
@@ -64,6 +65,7 @@ class GlobalSearchServiceProvider extends ServiceProvider
                 ReindexCommand::class,
                 ReindexTenantCommand::class,
                 SyncSettingsCommand::class,
+                FlushCommand::class,
                 HealthCommand::class,
             ]);
         }

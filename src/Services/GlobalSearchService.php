@@ -73,12 +73,40 @@ class GlobalSearchService
         $tenant = $tenant ?? $this->tenantResolver->getCurrentTenant();
         $mappings = $this->config['mappings'] ?? [];
 
+        if (empty($mappings)) {
+            Log::warning('No model mappings found in configuration. Nothing to reindex.');
+            return;
+        }
+
+        $totalJobs = 0;
         foreach ($mappings as $mapping) {
-            $model = $mapping['model'];
-            if (class_exists($model)) {
-                $this->indexModel($model, $tenant);
+            $modelClass = $mapping['model'];
+            if (class_exists($modelClass)) {
+                try {
+                    // Get all model IDs and dispatch them in batches
+                    $batchSize = $this->config['pipeline']['batch_size'] ?? 1000;
+                    $modelCount = 0;
+                    
+                    $modelClass::query()->chunkById($batchSize, function ($chunk) use ($modelClass, $tenant, &$modelCount, &$totalJobs) {
+                        $modelIds = $chunk->pluck('id')->toArray();
+                        if (!empty($modelIds)) {
+                            IndexJob::dispatch($modelClass, $modelIds, $tenant)
+                                ->onQueue($this->config['pipeline']['queue'] ?? 'default');
+                            $modelCount += count($modelIds);
+                            $totalJobs++;
+                        }
+                    });
+                    
+                    Log::info("Dispatched reindex jobs for {$modelClass}: {$modelCount} models in {$totalJobs} batches");
+                } catch (\Exception $e) {
+                    Log::error("Failed to reindex {$modelClass}: {$e->getMessage()}", ['exception' => $e]);
+                }
+            } else {
+                Log::warning("Model class {$modelClass} not found, skipping reindex");
             }
         }
+        
+        Log::info("Reindex completed: {$totalJobs} jobs dispatched for tenant: " . ($tenant ?? 'default'));
     }
 
     private function performSearch(string $query, array $filters, array $indexes, int $limit, ?string $tenant): array
@@ -92,15 +120,17 @@ class GlobalSearchService
                 $tenantIndex = $this->tenantResolver->getTenantIndexName($indexName);
                 $searchOptions = $this->buildSearchOptions($filters, $limit, $tenant);
                 
-                $result = $client->search($tenantIndex, $query, $searchOptions);
+                // Get the index first, then call search on it
+                $index = $client->index($tenantIndex);
+                $result = $index->search($query, $searchOptions);
                 
-                $hits = $result['hits'] ?? [];
+                $hits = $result->getHits();
                 foreach ($hits as &$hit) {
                     $hit['_index'] = $indexName;
                 }
                 
                 $allHits = array_merge($allHits, $hits);
-                $totalHits += (int) ($result['estimatedTotalHits'] ?? 0);
+                $totalHits += $result->getEstimatedTotalHits();
                 
             } catch (\Exception $e) {
                 Log::error("Search failed for index: {$indexName}", [

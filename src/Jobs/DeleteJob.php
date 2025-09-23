@@ -30,13 +30,14 @@ class DeleteJob implements ShouldQueue
     {
         try {
             $tenant = $this->tenant ?? $tenantResolver->getCurrentTenant();
-            $client = App::make(\LaravelGlobalSearch\GlobalSearch\Support\MeilisearchClient::class);
+            $client = App::make(Client::class);
             
             // Get index name
             $indexName = $this->getIndexName($tenant);
             
             // Delete documents
-            $client->deleteDocuments($indexName, $this->modelIds);
+            $index = $client->index($indexName);
+            $index->deleteDocuments($this->modelIds);
             
         } catch (\Exception $e) {
             Log::error('Deletion job failed', [
