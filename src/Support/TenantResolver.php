@@ -23,7 +23,13 @@ class TenantResolver
                 if ($tenancy->tenant) {
                     // Get tenant name from Stancl/Tenancy tenant
                     $tenant = $tenancy->tenant;
-                    return $tenant->name ?? $tenant->id ?? null;
+                    // Prefer name over id for better readability
+                    $tenantName = $tenant->name ?? $tenant->id ?? null;
+                    if ($tenantName) {
+                        // Normalize tenant name to lowercase with hyphens
+                        return strtolower(str_replace(' ', '-', $tenantName));
+                    }
+                    return null;
                 }
             } catch (\Exception $e) {
                 // Fall back to our own resolution
