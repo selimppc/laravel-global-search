@@ -1,25 +1,8 @@
 # Laravel Global Search
 
-[![Latest Version on Packagist](https://img.shields.io/packagist/v/laravel-global-search/global-search.svg?style=flat-square)](https://packagist.org/packages/laravel-global-search/global-search)
-[![Total Downloads](https://img.shields.io/packagist/dt/laravel-global-search/global-search.svg?style=flat-square)](https://packagist.org/packages/laravel-global-search/global-search)
-[![License](https://img.shields.io/packagist/l/laravel-global-search/global-search.svg?style=flat-square)](https://packagist.org/packages/laravel-global-search/global-search)
+A modern, minimal Laravel package for global search functionality with Meilisearch integration. **No complex setup required** - just add the trait to your models and you're ready to go!
 
-A professional, high-performance global search package for Laravel powered by Meilisearch with federated search capabilities. Search across multiple models and indexes with intelligent ranking, caching, and a beautiful UI component.
-
-## ✨ Features
-
-- **🔍 Federated Search**: Search across multiple models and indexes simultaneously
-- **⚡ High Performance**: Built-in caching with automatic cache invalidation
-- **🎯 Intelligent Ranking**: Configurable index weights and scoring algorithms
-- **🔄 Auto-Indexing**: Automatic model indexing on create, update, and delete
-- **📱 Beautiful UI**: Ready-to-use Alpine.js search component with Tailwind CSS
-- **🛠️ Developer Friendly**: Comprehensive console commands and diagnostics
-- **🔧 Highly Configurable**: Extensive configuration options for all use cases
-- **📊 Queue Support**: Background job processing for large datasets
-- **🔄 Soft Delete Support**: Automatic handling of soft-deleted models
-- **🎨 Custom Transformers**: Transform model data before indexing
-
-## 📦 Installation
+## 🚀 Quick Start
 
 ### 1. Install the Package
 
@@ -33,52 +16,16 @@ composer require laravel-global-search/global-search
 php artisan vendor:publish --tag=global-search-config
 ```
 
-### 3. Laravel 12 Setup (if applicable)
+### 3. Configure Meilisearch
 
-If you're using Laravel 12, the package will automatically detect this and help you set up API routes:
-
-```bash
-# Automatic setup (recommended)
-php artisan global-search:setup-laravel12
-```
-
-**Manual setup** (if needed):
-1. Create `routes/api.php` (the package will do this automatically)
-2. Update `bootstrap/app.php` to enable API routes:
-
-```php
-// bootstrap/app.php
-return Application::configure(basePath: dirname(__DIR__))
-    ->withRouting(
-        web: __DIR__.'/../routes/web.php',
-        api: __DIR__.'/../routes/api.php',  // Add this line
-        commands: __DIR__.'/../routes/console.php',
-        health: '/up',
-    )
-    // ... rest of configuration
-```
-
-### 4. Configure Environment Variables
-
-Add these to your `.env` file:
+Add to your `.env`:
 
 ```env
-# Meilisearch Configuration
-MEILISEARCH_HOST=http://127.0.0.1:7700
-MEILISEARCH_KEY=your-master-key-here
-MEILISEARCH_TIMEOUT=5
-
-# Global Search Configuration
-GLOBAL_SEARCH_CACHE_ENABLED=true
-GLOBAL_SEARCH_CACHE_STORE=redis
-GLOBAL_SEARCH_CACHE_TTL=60
-GLOBAL_SEARCH_QUEUE=default
-GLOBAL_SEARCH_BATCH_SIZE=1000
+GLOBAL_SEARCH_HOST=http://localhost:7700
+GLOBAL_SEARCH_KEY=your-master-key
 ```
 
-### 5. Make Your Models Searchable
-
-Add the `Searchable` trait to your models:
+### 4. Add to Your Models
 
 ```php
 <?php
@@ -88,384 +35,330 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use LaravelGlobalSearch\GlobalSearch\Traits\Searchable;
 
-class Product extends Model
+class User extends Model
 {
     use Searchable;
     
-    // Your model code...
+    // That's it! No getTenantId() method needed!
+    // The package automatically detects tenant context
 }
 ```
 
-### 6. Configure Mappings
-
-Edit `config/global-search.php` to define your model mappings:
+### 5. Search Your Data
 
 ```php
-'mappings' => [
-    [
-        'model' => App\Models\Product::class,
-        'index' => 'products',
-        'primary_key' => 'id',
-        'fields' => ['id', 'title', 'description', 'price', 'category'],
-        'computed' => [
-            'url' => fn($model) => route('products.show', $model->slug),
-            'formatted_price' => fn($model) => '$' . number_format($model->price, 2),
-        ],
-        'filterable' => ['category', 'price'],
-        'sortable' => ['price', 'created_at'],
-    ],
-],
+// In your controller
+$results = User::search('john doe');
+
+// Or use the search service directly
+$results = app('global-search')->search('john doe');
 ```
 
-### 7. Sync Settings and Index Data
+### 6. Add Search API Route
 
-```bash
-# Sync Meilisearch index settings
-php artisan search:sync-settings
-
-# Index your existing data
-php artisan search:reindex
+```php
+// In your routes/api.php
+Route::get('/search', function() {
+    return app('global-search')->search(request('q'));
+});
 ```
 
-## 🚀 Quick Start
+## 🎯 Features
+
+- **Zero Configuration**: Just add the trait and search works
+- **Auto Tenant Detection**: No need to add `getTenantId()` to models
+- **Job-Based Operations**: All indexing happens in background jobs for scale
+- **Multi-Tenant Ready**: Automatic tenant context detection
+- **Modern PHP**: Uses latest PHP features for minimal code
+- **Error-First Logging**: Only logs errors, minimal info logging
+- **Performance Optimized**: Built for scale with job queues
+- **Health Monitoring**: Built-in health checks and monitoring
+- **Error Resilience**: Automatic retry logic and circuit breaker
+- **Advanced Search**: Fuzzy search, highlighting, and autocomplete
+
+## 📖 Usage
 
 ### Basic Search
 
 ```php
-use LaravelGlobalSearch\GlobalSearch\Services\GlobalSearchService;
+// Search users
+$users = User::search('john');
 
-$searchService = app(GlobalSearchService::class);
+// Search with filters
+$users = User::search('john', ['status' => 'active']);
 
-$results = $searchService->search('laptop', [], 10);
+// Search with limit
+$users = User::search('john', [], 20);
 ```
 
-### Search with Filters
+### Advanced Search
 
 ```php
-$results = $searchService->search('laptop', [
-    'products' => ['category = electronics', 'price > 500'],
-    'users' => ['status = active']
-], 20);
-```
+// Use the search service directly
+$searchService = app('global-search');
 
-### API Endpoint
+// Search across all indexes
+$results = $searchService->search('john doe');
 
-The package automatically registers an API endpoint:
-
-```bash
-GET /global-search?q=search+query&limit=10
-```
-
-**Note:** In Laravel 12, the route is available at `/global-search` (not `/api/global-search`).
-
-### Frontend Component
-
-Include the search component in your Blade templates:
-
-```blade
-<x-global-search />
-```
-
-## 🎨 Frontend Integration
-
-### Using the Blade Component
-
-The package includes a beautiful, ready-to-use search component:
-
-```blade
-<!-- In your layout or any Blade template -->
-<x-global-search />
-```
-
-### Custom Styling
-
-The component uses Tailwind CSS classes. You can customize the appearance by:
-
-1. Publishing the views:
-```bash
-php artisan vendor:publish --tag=global-search-views
-```
-
-2. Modifying the component template in `resources/views/vendor/global-search/components/global-search.blade.php`
-
-### JavaScript Integration
-
-The component uses Alpine.js. Make sure you have Alpine.js loaded in your application:
-
-```html
-<script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
-```
-
-## ⚙️ Configuration
-
-### Federation Settings
-
-Configure which indexes to search and their relative weights:
-
-```php
-'federation' => [
-    'indexes' => [
-        'products' => ['weight' => 3.0],  // Higher weight = higher priority
-        'pages' => ['weight' => 1.0],
-        'users' => ['weight' => 2.0],
-    ],
-    'default_limit' => 10,
-    'max_limit' => 50,
-],
-```
-
-### Cache Configuration
-
-```php
-'cache' => [
-    'enabled' => true,
-    'store' => 'redis',
-    'ttl' => 60, // minutes
-    'version_key_prefix' => 'gs:index:',
-],
-```
-
-### Pipeline Settings
-
-```php
-'pipeline' => [
-    'queue' => 'default',
-    'batch_size' => 1000,
-    'retry_attempts' => 3,
-    'retry_delay' => 60, // seconds
-],
-```
-
-## 🛠️ Console Commands
-
-### Reindex Data
-
-```bash
-# Reindex all models
-php artisan search:reindex
-
-# Reindex specific index
-php artisan search:reindex products
-
-# Reindex specific IDs
-php artisan search:reindex products --ids=1,2,3,4,5
-
-# Reindex with custom chunk size
-php artisan search:reindex --chunk=500
-```
-
-### Flush Index
-
-```bash
-# Clear all documents from an index
-php artisan search:flush products
-
-# Skip confirmation prompt
-php artisan search:flush products --confirm
-```
-
-### Sync Settings
-
-```bash
-# Sync all index settings
-php artisan search:sync-settings
-
-# Sync specific index
-php artisan search:sync-settings --index=products
-```
-
-### Warm Cache
-
-```bash
-# Warm cache with specific queries
-php artisan search:warm-cache --queries="laptop" --queries="phone" --limit=20
-
-# Warm cache from file
-php artisan search:warm-cache --file=queries.txt
-```
-
-### Diagnostics
-
-```bash
-# Run comprehensive diagnostics
-php artisan search:doctor
-
-# Show detailed information
-php artisan search:doctor --verbose
-```
-
-## 🔧 Advanced Usage
-
-### Custom Document Transformers
-
-Create custom transformers for complex data processing:
-
-```php
-<?php
-
-namespace App\Search\Transformers;
-
-use LaravelGlobalSearch\GlobalSearch\Contracts\SearchDocumentTransformer;
-use Illuminate\Database\Eloquent\Model;
-
-class ProductTransformer implements SearchDocumentTransformer
-{
-    public function __invoke(Model $model, array $mapping): array
-    {
-        return [
-            'id' => $model->id,
-            'title' => $model->title,
-            'description' => $model->description,
-            'price' => $model->price,
-            'category' => $model->category->name,
-            'tags' => $model->tags->pluck('name')->toArray(),
-            'url' => route('products.show', $model->slug),
-            'image' => $model->getFirstMediaUrl('images'),
-            'rating' => $model->reviews()->avg('rating'),
-        ];
-    }
-}
-```
-
-Then use it in your mapping:
-
-```php
-[
-    'model' => App\Models\Product::class,
-    'index' => 'products',
-    'transformer' => App\Search\Transformers\ProductTransformer::class,
-],
-```
-
-### Custom Link Resolvers
-
-Create link resolvers for generating related links:
-
-```php
-<?php
-
-namespace App\Search\Resolvers;
-
-use LaravelGlobalSearch\GlobalSearch\Contracts\SearchResultLinkResolver;
-
-class ProductLinkResolver implements SearchResultLinkResolver
-{
-    public function resolve(array $hit): array
-    {
-        return [
-            ['label' => 'View Product', 'href' => $hit['url']],
-            ['label' => 'Add to Cart', 'href' => route('cart.add', $hit['id'])],
-            ['label' => 'Add to Wishlist', 'href' => route('wishlist.add', $hit['id'])],
-        ];
-    }
-}
+// Search with tenant context
+$results = $searchService->search('john doe', [], 10, 'tenant-1');
 ```
 
 ### Manual Indexing
 
 ```php
-// Index a specific model
-$product = Product::find(1);
-$product->searchable();
+// Index a single model
+$user->searchable();
 
 // Remove from search index
-$product->unsearchable();
+$user->unsearchable();
 
-// Index multiple models
-Product::where('status', 'published')->searchable();
+// Reindex all models
+User::reindexAll();
 ```
 
-## 📊 Performance Optimization
+## 🔧 Configuration
 
-### Caching Strategy
+The configuration is minimal and intuitive:
 
-- Use Redis for optimal cache performance
-- Adjust TTL based on your data update frequency
-- Monitor cache hit rates
+```php
+// config/global-search.php
+return [
+    // Meilisearch connection
+    'client' => [
+        'host' => env('GLOBAL_SEARCH_HOST', 'http://localhost:7700'),
+        'key' => env('GLOBAL_SEARCH_KEY'),
+        'timeout' => 5,
+    ],
 
-### Queue Configuration
+    // Search indexes
+    'indexes' => [
+        'users' => ['weight' => 2.0],
+        'products' => ['weight' => 1.0],
+    ],
 
-- Use dedicated queues for search indexing
-- Adjust batch sizes based on your server capacity
-- Monitor queue performance
+    // Model mappings
+    'mappings' => [
+        [
+            'model' => \App\Models\User::class,
+            'index' => 'users',
+            'fields' => ['id', 'name', 'email', 'created_at'],
+        ],
+    ],
 
-### Index Settings
+    // Multi-tenancy (optional)
+    'tenant' => [
+        'enabled' => env('GLOBAL_SEARCH_MULTI_TENANT', false),
+        'model' => \App\Models\Tenant::class,
+        'identifier_column' => 'id',
+    ],
 
-- Configure appropriate searchable attributes
-- Use typo tolerance for better user experience
-- Set up synonyms for common terms
+    // Job configuration
+    'pipeline' => [
+        'queue' => 'search',
+        'batch_size' => 100,
+    ],
+];
+```
+
+## 🏢 Multi-Tenancy
+
+The package automatically detects tenant context from:
+
+1. **Subdomain**: `tenant1.yourdomain.com`
+2. **Header**: `X-Tenant-ID: tenant1`
+3. **Route**: `/search?tenant=tenant1`
+4. **Auth User**: `auth()->user()->tenant_id`
+5. **Default**: First available tenant
+
+**No model changes required!** The package handles everything automatically.
+
+### Enable Multi-Tenancy
+
+```php
+// In your config
+'tenant' => [
+    'enabled' => true,
+    'model' => \App\Models\Tenant::class,
+    'identifier_column' => 'id',
+],
+```
+
+### Multi-Tenant Features
+
+- **Complete Tenant Isolation**: Each tenant has separate search indexes
+- **Automatic Tenant Detection**: No need to manually specify tenant context
+- **Flexible Resolution Strategies**: Support for multiple tenant detection methods
+- **Backward Compatibility**: Single-tenant setups work without changes
+- **Tenant-Specific Commands**: Commands work with specific tenants or all tenants
+
+## 🚀 Scaling with Jobs
+
+All indexing operations use background jobs for scale:
+
+```php
+// These automatically use jobs
+$user->searchable();        // Queued
+$user->unsearchable();      // Queued
+User::reindexAll();         // Queued
+
+// Run the queue worker
+php artisan queue:work --queue=search
+```
+
+## 📊 API Endpoints
+
+### Search API
+
+```http
+GET /global-search?q=john&limit=10&tenant=tenant1
+```
+
+Response:
+```json
+{
+    "success": true,
+    "data": {
+        "hits": [
+            {
+                "id": 1,
+                "name": "John Doe",
+                "email": "john@example.com",
+                "url": "/users/1",
+                "type": "User"
+            }
+        ],
+        "meta": {
+            "total": 1,
+            "indexes": ["users"],
+            "query": "john",
+            "limit": 10,
+            "tenant": "tenant1"
+        }
+    }
+}
+```
+
+## 🛠️ Commands
+
+```bash
+# Reindex all models
+php artisan search:reindex
+
+# Reindex specific tenant
+php artisan search:reindex-tenant tenant1
+
+# Sync index settings
+php artisan search:sync-settings
+
+# Check system health
+php artisan search:health
+```
+
+## 🔍 How It Works
+
+1. **Auto-Detection**: The package automatically detects tenant context
+2. **Job-Based**: All operations use background jobs for scale
+3. **Minimal Code**: Just add the trait to your models
+4. **Error-First**: Only logs errors, minimal info logging
+5. **Modern PHP**: Uses latest PHP features for clean code
+
+## 🚨 Error Handling
+
+The package handles all errors gracefully:
+
+- **Meilisearch Down**: Returns empty results, logs error
+- **Index Missing**: Creates index automatically
+- **Tenant Issues**: Falls back to default tenant
+- **Job Failures**: Retries with exponential backoff
+
+## 📈 Performance
+
+- **Background Jobs**: All indexing happens in background
+- **Batch Processing**: Processes models in batches
+- **Caching**: Intelligent caching with TTL
+- **Minimal Logging**: Only logs errors for performance
+
+## 🔒 Security
+
+- **Input Validation**: All inputs are validated
+- **Query Sanitization**: Prevents malicious queries
+- **Rate Limiting**: Built-in rate limiting support
+- **Tenant Isolation**: Complete tenant data isolation
+
+## 🔧 Advanced Features
+
+### Health Monitoring
+
+```bash
+# Check system health
+php artisan search:health
+
+# Check with detailed output
+php artisan search:health --detailed
+```
+
+### Error Handling & Resilience
+
+The package includes comprehensive error handling:
+
+- **Automatic Retry Logic**: Failed operations are retried with exponential backoff
+- **Circuit Breaker**: Prevents cascading failures when Meilisearch is down
+- **Graceful Degradation**: Returns empty results instead of crashing
+- **Error Logging**: Only logs actual errors, minimal info logging
+
+### Performance Optimizations
+
+- **Background Jobs**: All operations use queues for scale
+- **Batch Processing**: Processes models in configurable batches
+- **Intelligent Caching**: Caches search results with TTL
+- **Memory Management**: Optimized for large datasets
 
 ## 🧪 Testing
 
 ```bash
-# Run diagnostics
-php artisan search:doctor
+# Run tests
+php artisan test
 
-# Test search functionality
-php artisan tinker
->>> app(\LaravelGlobalSearch\GlobalSearch\Services\GlobalSearchService::class)->search('test')
+# Run with coverage
+php artisan test --coverage
 ```
 
-## 🔧 Troubleshooting
+## 📝 Logging
 
-### Routes Not Working in Laravel 12?
+The package uses minimal logging:
 
-1. **Check if API routes are enabled:**
-   ```bash
-   php artisan route:list | grep global-search
-   ```
-
-2. **Run the Laravel 12 setup command:**
-   ```bash
-   php artisan global-search:setup-laravel12
-   ```
-
-3. **Verify bootstrap/app.php configuration:**
-   - Ensure `api: __DIR__.'/../routes/api.php'` is in the `withRouting()` section
-   - Check that `routes/api.php` exists
-
-4. **Clear configuration cache:**
-   ```bash
-   php artisan config:clear
-   php artisan route:clear
-   ```
-
-### Common Issues
-
-**Issue:** "Route not found" for `/api/global-search`
-- **Solution:** In Laravel 12, the route is at `/global-search` (not `/api/global-search`). Run `php artisan global-search:setup-laravel12`
-
-**Issue:** Package not loading routes
-- **Solution:** Check that the service provider is registered in `composer.json` and run `composer dump-autoload`
-
-**Issue:** Meilisearch connection errors
-- **Solution:** Verify your `.env` configuration and run `php artisan search:doctor`
-
-## 📝 Changelog
-
-Please see [CHANGELOG](CHANGELOG.md) for more information on what has changed recently.
+- **ERROR**: Only logs actual errors
+- **No INFO**: No unnecessary info logging
+- **Context**: Includes relevant context in error logs
 
 ## 🤝 Contributing
 
-Please see [CONTRIBUTING](CONTRIBUTING.md) for details.
-
-## 🔒 Security
-
-If you discover any security related issues, please email security@laravel-global-search.com instead of using the issue tracker.
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests
+5. Submit a pull request
 
 ## 📄 License
 
-The MIT License (MIT). Please see [License File](LICENSE.md) for more information.
+This package is open-sourced software licensed under the [MIT license](LICENSE).
 
-## 🙏 Credits
+## 🆘 Support
 
-- [Laravel Global Search Team](https://github.com/laravel-global-search)
-- [Meilisearch](https://www.meilisearch.com/) for the amazing search engine
-- [Laravel](https://laravel.com/) for the excellent framework
-- All Contributors
+- **Documentation**: Check this README
+- **Issues**: Open an issue on GitHub
+- **Discussions**: Use GitHub Discussions
 
-## 📞 Support
+## 🎉 That's It!
 
-- [Documentation](https://laravel-global-search.com/docs)
-- [GitHub Issues](https://github.com/laravel-global-search/global-search/issues)
-- [Discord Community](https://discord.gg/laravel-global-search)
+You now have a fully functional global search system with:
+
+- ✅ **Zero configuration** for basic usage
+- ✅ **Auto tenant detection** - no model changes needed
+- ✅ **Job-based operations** for scale
+- ✅ **Modern PHP** with minimal code
+- ✅ **Error-first logging** for performance
+- ✅ **Multi-tenant ready** out of the box
+
+Happy searching! 🔍

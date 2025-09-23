@@ -1,36 +1,55 @@
 {
     "name": "laravel-global-search/global-search",
-    "description": "A professional, high-performance global search package for Laravel powered by Meilisearch with federated search capabilities.",
-    "type": "library",
+    "description": "A comprehensive Laravel package for global search functionality with Meilisearch integration, multi-tenancy support, and advanced features.",
+    "keywords": ["laravel", "search", "meilisearch", "global-search", "multi-tenant", "analytics"],
     "license": "MIT",
-    "keywords": ["laravel", "search", "meilisearch", "global-search", "federated-search", "eloquent"],
-    "authors": [
-        {
-            "name": "Laravel Global Search Team",
-            "email": "support@laravel-global-search.com"
-        }
-    ],
+    "type": "library",
+    "require": {
+        "php": "^8.1",
+        "illuminate/support": "^10.0|^11.0",
+        "illuminate/contracts": "^10.0|^11.0",
+        "illuminate/console": "^10.0|^11.0",
+        "illuminate/http": "^10.0|^11.0",
+        "illuminate/cache": "^10.0|^11.0",
+        "illuminate/database": "^10.0|^11.0",
+        "illuminate/queue": "^10.0|^11.0",
+        "guzzlehttp/guzzle": "^7.0",
+        "ext-json": "*",
+        "ext-curl": "*"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.0",
+        "orchestra/testbench": "^8.0|^9.0"
+    },
     "autoload": {
         "psr-4": {
             "LaravelGlobalSearch\\GlobalSearch\\": "src/"
         }
     },
-    "extra": {
+    "autoload-dev": {
+        "psr-4": {
+            "LaravelGlobalSearch\\GlobalSearch\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit",
+        "test-coverage": "phpunit --coverage-html coverage"
+    },
+        "extra": {
         "laravel": {
             "providers": [
                 "LaravelGlobalSearch\\GlobalSearch\\GlobalSearchServiceProvider"
-            ]
+            ],
+            "aliases": {
+                "GlobalSearch": "LaravelGlobalSearch\\GlobalSearch\\Services\\GlobalSearchService"
+            }
         }
     },
-    "require": {
-        "php": ">=8.1",
-        "illuminate/support": "^10.0|^11.0|^12.0",
-        "illuminate/queue": "^10.0|^11.0|^12.0",
-        "illuminate/cache": "^10.0|^11.0|^12.0",
-        "guzzlehttp/guzzle": "^7.8"
-    },
-    "require-dev": {
-        "orchestra/testbench": "^8.0|^9.0"
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "php-http/discovery": true
+        }
     },
     "minimum-stability": "stable",
     "prefer-stable": true

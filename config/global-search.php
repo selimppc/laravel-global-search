@@ -224,4 +224,75 @@ return [
         // Custom resolver for getting all tenants (when source is 'custom')
         'list_resolver' => null, // function() { return ['tenant1', 'tenant2']; }
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Retry Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Configure retry behavior for failed requests.
+    |
+    */
+    'retry' => [
+        'max_retries' => env('GLOBAL_SEARCH_MAX_RETRIES', 3),
+        'retry_delay' => env('GLOBAL_SEARCH_RETRY_DELAY', 1000), // milliseconds
+        'exponential_backoff' => env('GLOBAL_SEARCH_EXPONENTIAL_BACKOFF', true),
+        'retry_on_status' => [500, 502, 503, 504, 429],
+        'circuit_breaker_threshold' => env('GLOBAL_SEARCH_CIRCUIT_BREAKER_THRESHOLD', 5),
+        'circuit_breaker_timeout' => env('GLOBAL_SEARCH_CIRCUIT_BREAKER_TIMEOUT', 60), // seconds
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Performance Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Configure performance monitoring and optimization.
+    |
+    */
+    'performance' => [
+        'monitoring_enabled' => env('GLOBAL_SEARCH_MONITORING_ENABLED', true),
+        'max_search_history' => env('GLOBAL_SEARCH_MAX_SEARCH_HISTORY', 1000),
+        'max_metrics_history' => env('GLOBAL_SEARCH_MAX_METRICS_HISTORY', 1000),
+        'slow_query_threshold' => env('GLOBAL_SEARCH_SLOW_QUERY_THRESHOLD', 1.0), // seconds
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Security Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Configure security features and validation.
+    |
+    */
+    'security' => [
+        'max_query_length' => env('GLOBAL_SEARCH_MAX_QUERY_LENGTH', 1000),
+        'dangerous_patterns' => [
+            '/<script/i',
+            '/javascript:/i',
+            '/on\w+\s*=/i',
+            '/union\s+select/i',
+            '/drop\s+table/i',
+            '/delete\s+from/i'
+        ],
+        'rate_limiting' => [
+            'enabled' => env('GLOBAL_SEARCH_RATE_LIMITING_ENABLED', false),
+            'max_requests_per_minute' => env('GLOBAL_SEARCH_RATE_LIMIT', 60),
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Analytics Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Configure search analytics and insights.
+    |
+    */
+    'analytics' => [
+        'enabled' => env('GLOBAL_SEARCH_ANALYTICS_ENABLED', true),
+        'retention_days' => env('GLOBAL_SEARCH_ANALYTICS_RETENTION_DAYS', 30),
+        'track_zero_results' => env('GLOBAL_SEARCH_TRACK_ZERO_RESULTS', true),
+        'track_popular_queries' => env('GLOBAL_SEARCH_TRACK_POPULAR_QUERIES', true),
+    ],
 ];
