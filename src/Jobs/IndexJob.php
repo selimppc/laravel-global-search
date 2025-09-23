@@ -106,7 +106,7 @@ class IndexJob implements ShouldQueue
         // Get the correct index name from configuration
         $config = app('config')->get('global-search');
         $mappings = $config['mappings'] ?? [];
-        
+
         // Find the mapping for this model class
         foreach ($mappings as $mapping) {
             if ($mapping['model'] === $this->modelClass) {
@@ -114,15 +114,16 @@ class IndexJob implements ShouldQueue
                 break;
             }
         }
-        
+
         // Fallback to class name if no mapping found
         if (!isset($baseIndex)) {
             $baseIndex = strtolower(class_basename($this->modelClass));
         }
         
         if ($tenant) {
-            // Use tenant ID directly for proper multi-tenant isolation
-            return "{$baseIndex}_{$tenant}";
+            // Use TenantResolver to get properly normalized index name
+            $tenantResolver = app(\LaravelGlobalSearch\GlobalSearch\Support\TenantResolver::class);
+            return $tenantResolver->getTenantIndexName($baseIndex, $tenant);
         }
         
         return $baseIndex;

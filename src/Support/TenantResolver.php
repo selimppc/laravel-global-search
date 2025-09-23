@@ -76,7 +76,24 @@ class TenantResolver
         }
 
         $tenant = $tenant ?? $this->getCurrentTenant();
-        return $tenant ? "{$baseIndexName}_{$tenant}" : $baseIndexName;
+        if (!$tenant) {
+            return $baseIndexName;
+        }
+
+        // Normalize tenant name for Meilisearch index UID
+        $normalizedTenant = $this->normalizeTenantName($tenant);
+        return "{$baseIndexName}_{$normalizedTenant}";
+    }
+
+    private function normalizeTenantName(string $tenantName): string
+    {
+        // Convert to lowercase and replace spaces/special chars with hyphens
+        $normalized = strtolower($tenantName);
+        $normalized = preg_replace('/[^a-z0-9\-_]/', '-', $normalized);
+        $normalized = preg_replace('/-+/', '-', $normalized); // Remove multiple consecutive hyphens
+        $normalized = trim($normalized, '-'); // Remove leading/trailing hyphens
+        
+        return $normalized;
     }
 
     public function getAllTenants(): array
