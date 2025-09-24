@@ -76,13 +76,27 @@ class IndexJob implements ShouldQueue
             // Get index name
             $indexName = $this->getIndexName($tenant);
             
-            // Get index and create it with primary key if it doesn't exist
+            // Get primary key from mapping
+            $primaryKey = $this->getPrimaryKeyFromMapping();
+            
+            // Create index with primary key if it doesn't exist
+            try {
+                $index = $client->index($indexName);
+                $settings = $index->getSettings();
+                $currentPrimaryKey = $settings['primaryKey'] ?? null;
+                
+                // If index has wrong/no primary key, delete and recreate
+                if ($currentPrimaryKey !== $primaryKey) {
+                    $client->deleteIndex($indexName);
+                    $client->createIndex($indexName, ['primaryKey' => $primaryKey]);
+                }
+            } catch (\Exception $e) {
+                // Index doesn't exist, create it with primary key
+                $client->createIndex($indexName, ['primaryKey' => $primaryKey]);
+            }
+            
+            // Get the index and add documents
             $index = $client->index($indexName);
-            
-            // Check if index exists and create it with primary key if needed
-            $this->createIndexWithPrimaryKeyIfNeeded($client, $indexName);
-            
-            // Index documents
             $index->addDocuments($documents);
             
         } catch (\Exception $e) {
@@ -183,38 +197,6 @@ class IndexJob implements ShouldQueue
         }
     }
     
-    private function createIndexWithPrimaryKeyIfNeeded($client, string $indexName): void
-    {
-        try {
-            // Get the primary key from the mapping configuration
-            $primaryKey = $this->getPrimaryKeyFromMapping();
-            
-            if ($primaryKey) {
-                // Check if index exists
-                try {
-                    $index = $client->index($indexName);
-                    $settings = $index->getSettings();
-                    $currentPrimaryKey = $settings['primaryKey'] ?? null;
-                    
-                    // If index exists but has wrong/no primary key, delete and recreate
-                    if ($currentPrimaryKey !== $primaryKey) {
-                        Log::info("Index {$indexName} has wrong primary key '{$currentPrimaryKey}', recreating with '{$primaryKey}'");
-                        $client->deleteIndex($indexName);
-                        $client->createIndex($indexName, ['primaryKey' => $primaryKey]);
-                        Log::info("Recreated index {$indexName} with primary key '{$primaryKey}'");
-                    }
-                } catch (\Exception $e) {
-                    // Index doesn't exist - create it with primary key
-                    Log::info("Creating index {$indexName} with primary key '{$primaryKey}'");
-                    $client->createIndex($indexName, ['primaryKey' => $primaryKey]);
-                    Log::info("Created index {$indexName} with primary key '{$primaryKey}'");
-                }
-            }
-        } catch (\Exception $e) {
-            Log::warning("Failed to create index with primary key for {$indexName}: {$e->getMessage()}");
-            // Don't throw - continue with indexing even if index creation fails
-        }
-    }
     
     
     private function setPrimaryKeyViaRawAPI(string $indexName, string $primaryKey): void
