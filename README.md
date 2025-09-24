@@ -2,6 +2,8 @@
 
 A modern, minimal Laravel package for global search functionality with Meilisearch integration. **No complex setup required** - just add the trait to your models and you're ready to go!
 
+> **Latest Update (v1.1.17)**: Added robust primary key handling with `php artisan search:fix-primary-keys` command to ensure reliable indexing.
+
 ## 🚀 Quick Start
 
 ### 1. Install the Package
@@ -412,6 +414,15 @@ php artisan search:health
 
 # Check performance metrics
 php artisan search:performance
+
+# Fix primary keys for all indexes (robust solution)
+php artisan search:fix-primary-keys
+
+# Fix primary keys for specific tenant
+php artisan search:fix-primary-keys tenant1
+
+# Fix primary keys for all tenants
+php artisan search:fix-primary-keys --all
 ```
 
 ## 🔄 Data Transformation
@@ -570,6 +581,48 @@ The package includes comprehensive error handling:
 - **Batch Processing**: Processes models in configurable batches
 - **Intelligent Caching**: Caches search results with TTL
 - **Memory Management**: Optimized for large datasets
+
+## 🔧 Troubleshooting
+
+### Primary Key Issues
+
+If you encounter `primaryKey: null` in your Meilisearch indexes, use the robust fix command:
+
+```bash
+# Fix primary keys for all indexes
+php artisan search:fix-primary-keys
+
+# Check the result
+curl -s "http://localhost:7700/indexes" | jq '.'
+```
+
+This command ensures all indexes are created with the correct primary key from your configuration.
+
+### Queue Processing Issues
+
+If reindexing jobs are not being processed consistently:
+
+1. **Use the fix command** (recommended):
+   ```bash
+   php artisan search:fix-primary-keys
+   ```
+
+2. **Check queue status**:
+   ```bash
+   php artisan queue:failed
+   php artisan queue:work --once --verbose
+   ```
+
+3. **Manual reindexing**:
+   ```bash
+   php artisan search:reindex
+   ```
+
+### Common Issues
+
+- **Indexes not created**: Run `php artisan search:fix-primary-keys`
+- **Documents not indexed**: Check queue processing with `php artisan queue:work`
+- **Wrong primary keys**: Use the fix command to recreate indexes correctly
 
 ## 🧪 Testing
 
