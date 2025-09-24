@@ -79,21 +79,8 @@ class IndexJob implements ShouldQueue
             // Get primary key from mapping
             $primaryKey = $this->getPrimaryKeyFromMapping();
             
-            // Create index with primary key if it doesn't exist
-            try {
-                $index = $client->index($indexName);
-                $settings = $index->getSettings();
-                $currentPrimaryKey = $settings['primaryKey'] ?? null;
-                
-                // If index has wrong/no primary key, delete and recreate
-                if ($currentPrimaryKey !== $primaryKey) {
-                    $client->deleteIndex($indexName);
-                    $client->createIndex($indexName, ['primaryKey' => $primaryKey]);
-                }
-            } catch (\Exception $e) {
-                // Index doesn't exist, create it with primary key
-                $client->createIndex($indexName, ['primaryKey' => $primaryKey]);
-            }
+            // Always ensure index exists with correct primary key
+            $this->ensureIndexWithPrimaryKey($client, $indexName, $primaryKey);
             
             // Get the index and add documents
             $index = $client->index($indexName);
@@ -212,6 +199,34 @@ class IndexJob implements ShouldQueue
         }
     }
     
+    private function ensureIndexWithPrimaryKey($client, string $indexName, string $primaryKey): void
+    {
+        try {
+            // Check if index exists and has correct primary key
+            try {
+                $index = $client->index($indexName);
+                $settings = $index->getSettings();
+                $currentPrimaryKey = $settings['primaryKey'] ?? null;
+                
+                // If index has wrong/no primary key, delete and recreate
+                if ($currentPrimaryKey !== $primaryKey) {
+                    Log::info("Index {$indexName} has wrong primary key '{$currentPrimaryKey}', recreating with '{$primaryKey}'");
+                    $client->deleteIndex($indexName);
+                    $client->createIndex($indexName, ['primaryKey' => $primaryKey]);
+                    Log::info("Recreated index {$indexName} with primary key '{$primaryKey}'");
+                }
+            } catch (\Exception $e) {
+                // Index doesn't exist, create it with primary key
+                Log::info("Creating index {$indexName} with primary key '{$primaryKey}'");
+                $client->createIndex($indexName, ['primaryKey' => $primaryKey]);
+                Log::info("Created index {$indexName} with primary key '{$primaryKey}'");
+            }
+        } catch (\Exception $e) {
+            Log::error("Failed to ensure index with primary key for {$indexName}: {$e->getMessage()}");
+            // Don't throw - continue with indexing even if index creation fails
+        }
+    }
+
     private function getPrimaryKeyFromMapping(): ?string
     {
         $config = app('config')->get('global-search');
