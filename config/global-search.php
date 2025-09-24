@@ -49,7 +49,7 @@ return [
         [
             'model' => App\Models\Product::class,
             'index' => 'products',
-            'primary_key' => 'id',
+            'primaryKey' => 'id',
             'fields' => [
                 'id', 'slug', 'title', 'sku', 'brand', 'category', 
                 'price', 'status', 'description', 'created_at', 'updated_at'
@@ -69,7 +69,7 @@ return [
         [
             'model' => App\Models\Page::class,
             'index' => 'pages',
-            'primary_key' => 'id',
+            'primaryKey' => 'id',
             'fields' => ['id', 'slug', 'title', 'excerpt', 'content', 'created_at', 'updated_at'],
             'computed' => [
                 'url' => fn($model) => route('pages.show', $model->slug),
@@ -83,7 +83,7 @@ return [
         [
             'model' => App\Models\User::class,
             'index' => 'users',
-            'primary_key' => 'id',
+            'primaryKey' => 'id',
             'fields' => ['id', 'name', 'email', 'created_at', 'updated_at'],
             'computed' => [
                 'url' => fn($model) => route('users.show', $model->id),
