@@ -74,8 +74,11 @@ class IndexJob implements ShouldQueue
             // Get index name
             $indexName = $this->getIndexName($tenant);
             
-            // Index documents
+            // Get index and ensure it exists with proper primary key
             $index = $client->index($indexName);
+            $this->ensureIndexExistsWithPrimaryKey($client, $indexName);
+            
+            // Index documents
             $index->addDocuments($documents);
             
         } catch (\Exception $e) {
@@ -174,5 +177,87 @@ class IndexJob implements ShouldQueue
             Log::error("Failed to initialize tenant context in IndexJob: {$e->getMessage()}");
             throw $e;
         }
+    }
+    
+    private function ensureIndexExistsWithPrimaryKey($client, string $indexName): void
+    {
+        try {
+            // Get the primary key from the mapping configuration
+            $primaryKey = $this->getPrimaryKeyFromMapping();
+            
+            if ($primaryKey) {
+                // Check if index exists and has the correct primary key
+                try {
+                    $index = $client->index($indexName);
+                    $settings = $index->getSettings();
+                    $currentPrimaryKey = $settings['primaryKey'] ?? null;
+                    
+                    if ($currentPrimaryKey !== $primaryKey) {
+                        // Index exists but has wrong/no primary key - recreate it
+                        Log::info("Recreating index {$indexName} with primary key '{$primaryKey}'");
+                        $this->recreateIndexWithPrimaryKey($client, $indexName, $primaryKey);
+                    }
+                } catch (\Exception $e) {
+                    // Index doesn't exist - create it with primary key
+                    Log::info("Creating index {$indexName} with primary key '{$primaryKey}'");
+                    $this->createIndexWithPrimaryKey($client, $indexName, $primaryKey);
+                }
+            }
+        } catch (\Exception $e) {
+            Log::warning("Failed to ensure index exists with primary key for {$indexName}: {$e->getMessage()}");
+            // Don't throw - continue with indexing even if index creation fails
+        }
+    }
+    
+    private function createIndexWithPrimaryKey($client, string $indexName, string $primaryKey): void
+    {
+        try {
+            $client->createIndex($indexName, ['primaryKey' => $primaryKey]);
+            Log::info("Created index {$indexName} with primary key '{$primaryKey}'");
+        } catch (\Exception $e) {
+            Log::error("Failed to create index {$indexName}: {$e->getMessage()}");
+        }
+    }
+    
+    private function recreateIndexWithPrimaryKey($client, string $indexName, string $primaryKey): void
+    {
+        try {
+            // Delete the existing index
+            $client->deleteIndex($indexName);
+            // Create new index with primary key
+            $client->createIndex($indexName, ['primaryKey' => $primaryKey]);
+            Log::info("Recreated index {$indexName} with primary key '{$primaryKey}'");
+        } catch (\Exception $e) {
+            Log::error("Failed to recreate index {$indexName}: {$e->getMessage()}");
+        }
+    }
+    
+    private function setPrimaryKeyViaRawAPI(string $indexName, string $primaryKey): void
+    {
+        try {
+            $client = app(\Meilisearch\Client::class);
+            $response = $client->patch("/indexes/{$indexName}", [
+                'primaryKey' => $primaryKey
+            ]);
+            Log::info("Set primary key '{$primaryKey}' for index: {$indexName} via raw API");
+        } catch (\Exception $e) {
+            Log::error("Failed to set primary key via raw API for index {$indexName}: {$e->getMessage()}");
+        }
+    }
+    
+    private function getPrimaryKeyFromMapping(): ?string
+    {
+        $config = app('config')->get('global-search');
+        $mappings = $config['mappings'] ?? [];
+
+        // Find the mapping for this model class
+        foreach ($mappings as $mapping) {
+            if ($mapping['model'] === $this->modelClass) {
+                return $mapping['primary_key'] ?? 'id';
+            }
+        }
+
+        // Default to 'id' if no mapping found
+        return 'id';
     }
 }
