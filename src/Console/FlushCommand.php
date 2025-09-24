@@ -33,6 +33,10 @@ class FlushCommand extends Command
                     }
                 }
             } else {
+                // If no tenant specified, use current tenant
+                if (!$tenant) {
+                    $tenant = $tenantResolver->getCurrentTenant();
+                }
                 $this->flushTenant($searchService, $tenant, $force);
             }
             
