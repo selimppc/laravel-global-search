@@ -23,10 +23,7 @@ class ReindexCommand extends Command
             
             // Ensure primary keys are set correctly before reindexing
             $this->info('🔧 Ensuring primary keys are set correctly...');
-            $this->call('search:fix-primary-keys', [
-                'tenant' => $tenant,
-                '--all' => $all
-            ]);
+            $this->fixPrimaryKeysDirectly($tenant, $all);
             
             if ($all) {
                 $this->reindexAllTenants($searchService, $tenantResolver, $force);
@@ -264,6 +261,64 @@ class ReindexCommand extends Command
         } catch (\Exception $e) {
             $this->error("❌ Failed to initialize tenant context: {$e->getMessage()}");
             $this->warn("Continuing with landlord database...");
+        }
+    }
+
+    private function fixPrimaryKeysDirectly(?string $tenant, bool $all): void
+    {
+        try {
+            $client = app(\Meilisearch\Client::class);
+            $config = config('global-search');
+            $mappings = $config['mappings'] ?? [];
+
+            if ($all) {
+                $tenants = app(TenantResolver::class)->getAllTenants();
+                if (empty($tenants)) {
+                    $this->warn('No tenants found. Processing default indexes.');
+                    $this->processIndexesForPrimaryKeys($client, $mappings, null);
+                } else {
+                    foreach ($tenants as $tId) {
+                        $this->info("Processing tenant: {$tId}");
+                        $this->processIndexesForPrimaryKeys($client, $mappings, $tId);
+                    }
+                }
+            } else {
+                $this->processIndexesForPrimaryKeys($client, $mappings, $tenant);
+            }
+        } catch (\Exception $e) {
+            $this->error("Failed to fix primary keys: {$e->getMessage()}");
+        }
+    }
+
+    private function processIndexesForPrimaryKeys($client, array $mappings, ?string $tenantId): void
+    {
+        foreach ($mappings as $mapping) {
+            $baseIndexName = $mapping['index'];
+            $primaryKey = $mapping['primaryKey'] ?? $mapping['primary_key'] ?? 'id';
+
+            $indexName = $baseIndexName;
+            if ($tenantId) {
+                $indexName = "{$baseIndexName}_{$tenantId}";
+            }
+
+            try {
+                $index = $client->index($indexName);
+                $settings = $index->getSettings();
+                $currentPrimaryKey = $settings['primaryKey'] ?? null;
+
+                if ($currentPrimaryKey !== $primaryKey) {
+                    $this->warn("Index {$indexName} has wrong primary key '{$currentPrimaryKey}', recreating with '{$primaryKey}'");
+                    $client->deleteIndex($indexName);
+                    $client->createIndex($indexName, ['primaryKey' => $primaryKey]);
+                    $this->info("✅ Fixed index {$indexName} with primary key '{$primaryKey}'");
+                } else {
+                    $this->info("Index {$indexName} already has correct primary key '{$primaryKey}'");
+                }
+            } catch (\Exception $e) {
+                $this->info("Index {$indexName} doesn't exist, creating it with primary key '{$primaryKey}'");
+                $client->createIndex($indexName, ['primaryKey' => $primaryKey]);
+                $this->info("✅ Created index {$indexName} with primary key '{$primaryKey}'");
+            }
         }
     }
 }
