@@ -84,6 +84,20 @@ class IndexJob implements ShouldQueue
             
             // Get the index and add documents
             $index = $client->index($indexName);
+            
+            // Verify the index has the correct primary key before adding documents
+            $settings = $index->getSettings();
+            $currentPrimaryKey = $settings['primaryKey'] ?? null;
+            
+            if ($currentPrimaryKey !== $primaryKey) {
+                Log::warning("Index {$indexName} still has wrong primary key '{$currentPrimaryKey}' after fix attempt");
+                // Force recreate the index
+                $client->deleteIndex($indexName);
+                $client->createIndex($indexName, ['primaryKey' => $primaryKey]);
+                $index = $client->index($indexName);
+                Log::info("Force recreated index {$indexName} with primary key '{$primaryKey}'");
+            }
+            
             $index->addDocuments($documents);
             
         } catch (\Exception $e) {
