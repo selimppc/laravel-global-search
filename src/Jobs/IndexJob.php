@@ -253,7 +253,8 @@ class IndexJob implements ShouldQueue
         // Find the mapping for this model class
         foreach ($mappings as $mapping) {
             if ($mapping['model'] === $this->modelClass) {
-                return $mapping['primary_key'] ?? 'id';
+                // Support both snake_case and camelCase formats
+                return $mapping['primary_key'] ?? $mapping['primaryKey'] ?? 'id';
             }
         }
 
