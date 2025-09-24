@@ -193,15 +193,12 @@ class IndexJob implements ShouldQueue
                     $index = $client->index($indexName);
                     $settings = $index->getSettings();
                     $currentPrimaryKey = $settings['primaryKey'] ?? null;
-                    
                     if ($currentPrimaryKey !== $primaryKey) {
                         // Index exists but has wrong/no primary key - recreate it
-                        Log::info("Recreating index {$indexName} with primary key '{$primaryKey}'");
                         $this->recreateIndexWithPrimaryKey($client, $indexName, $primaryKey);
                     }
                 } catch (\Exception $e) {
                     // Index doesn't exist - create it with primary key
-                    Log::info("Creating index {$indexName} with primary key '{$primaryKey}'");
                     $this->createIndexWithPrimaryKey($client, $indexName, $primaryKey);
                 }
             }
