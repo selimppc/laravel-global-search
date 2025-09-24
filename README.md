@@ -2,7 +2,7 @@
 
 A modern, minimal Laravel package for global search functionality with Meilisearch integration. **No complex setup required** - just add the trait to your models and you're ready to go!
 
-> **Latest Update (v1.1.17)**: Added robust primary key handling with `php artisan search:fix-primary-keys` command to ensure reliable indexing.
+> **Latest Update (v1.1.17)**: Simplified workflow - `php artisan search:reindex` now automatically fixes all issues including primary keys.
 
 ## 🚀 Quick Start
 
@@ -388,41 +388,17 @@ Response:
 ## 🛠️ Commands
 
 ```bash
-# Reindex all models
+# Reindex all models (fixes everything automatically)
 php artisan search:reindex
 
 # Reindex specific tenant
 php artisan search:reindex-tenant tenant1
 
-# Sync index settings
-php artisan search:sync-settings
-
 # Flush all documents
 php artisan search:flush
 
-# Flush specific tenant
-php artisan search:flush tenant1
-
-# Check index status
-php artisan search:status
-
-# Check index status with details
-php artisan search:status --detailed
-
 # Check system health
 php artisan search:health
-
-# Check performance metrics
-php artisan search:performance
-
-# Fix primary keys for all indexes (robust solution)
-php artisan search:fix-primary-keys
-
-# Fix primary keys for specific tenant
-php artisan search:fix-primary-keys tenant1
-
-# Fix primary keys for all tenants
-php artisan search:fix-primary-keys --all
 ```
 
 ## 🔄 Data Transformation
@@ -584,45 +560,20 @@ The package includes comprehensive error handling:
 
 ## 🔧 Troubleshooting
 
-### Primary Key Issues
+### Simple Fix for Any Issues
 
-If you encounter `primaryKey: null` in your Meilisearch indexes, use the robust fix command:
+If you encounter any search issues, just run:
 
 ```bash
-# Fix primary keys for all indexes
-php artisan search:fix-primary-keys
-
-# Check the result
-curl -s "http://localhost:7700/indexes" | jq '.'
+# This fixes everything automatically
+php artisan search:reindex
 ```
 
-This command ensures all indexes are created with the correct primary key from your configuration.
-
-### Queue Processing Issues
-
-If reindexing jobs are not being processed consistently:
-
-1. **Use the fix command** (recommended):
-   ```bash
-   php artisan search:fix-primary-keys
-   ```
-
-2. **Check queue status**:
-   ```bash
-   php artisan queue:failed
-   php artisan queue:work --once --verbose
-   ```
-
-3. **Manual reindexing**:
-   ```bash
-   php artisan search:reindex
-   ```
-
-### Common Issues
-
-- **Indexes not created**: Run `php artisan search:fix-primary-keys`
-- **Documents not indexed**: Check queue processing with `php artisan queue:work`
-- **Wrong primary keys**: Use the fix command to recreate indexes correctly
+The reindex command now automatically:
+- ✅ Fixes primary keys
+- ✅ Creates indexes correctly  
+- ✅ Processes all models
+- ✅ Handles multi-tenancy
 
 ## 🧪 Testing
 

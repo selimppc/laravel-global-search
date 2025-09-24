@@ -98,6 +98,13 @@ class IndexJob implements ShouldQueue
                 Log::info("Force recreated index {$indexName} with primary key '{$primaryKey}'");
             }
             
+            // Final verification - if still wrong, log error but continue
+            $finalSettings = $index->getSettings();
+            $finalPrimaryKey = $finalSettings['primaryKey'] ?? null;
+            if ($finalPrimaryKey !== $primaryKey) {
+                Log::error("CRITICAL: Index {$indexName} still has wrong primary key '{$finalPrimaryKey}' after all attempts. Manual fix required.");
+            }
+            
             $index->addDocuments($documents);
             
         } catch (\Exception $e) {

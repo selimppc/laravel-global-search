@@ -21,6 +21,13 @@ class ReindexCommand extends Command
             // Initialize global tenant context - this should be automatic
             $this->initializeGlobalTenantContext($tenantResolver, $tenant);
             
+            // Ensure primary keys are set correctly before reindexing
+            $this->info('🔧 Ensuring primary keys are set correctly...');
+            $this->call('search:fix-primary-keys', [
+                'tenant' => $tenant,
+                '--all' => $all
+            ]);
+            
             if ($all) {
                 $this->reindexAllTenants($searchService, $tenantResolver, $force);
             } else {
