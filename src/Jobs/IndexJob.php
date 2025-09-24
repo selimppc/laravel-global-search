@@ -33,8 +33,10 @@ class IndexJob implements ShouldQueue
         try {
             $tenant = $this->tenant ?? $tenantResolver->getCurrentTenant();
             
-            // Tenant context should already be initialized globally
-            // No need to manually initialize it here
+            // Initialize tenant context to access tenant-specific models
+            if ($tenant) {
+                $this->initializeTenantContext($tenant);
+            }
             
             $client = App::make(Client::class);
             
