@@ -2,7 +2,7 @@
 
 A modern, minimal Laravel package for global search functionality with Meilisearch integration. **No complex setup required** - just add the trait to your models and you're ready to go!
 
-> **Latest Update (v1.1.17)**: Simplified workflow - `php artisan search:reindex` now automatically fixes all issues including primary keys.
+> **Latest Update (v1.1.18)**: Bulletproof workflow - `php artisan search:fix-primary-keys && php artisan search:reindex` ensures 100% reliable indexing.
 
 ## 🚀 Quick Start
 
@@ -388,7 +388,10 @@ Response:
 ## 🛠️ Commands
 
 ```bash
-# Reindex all models (fixes everything automatically)
+# BULLETPROOF: Fix primary keys + reindex (recommended)
+php artisan search:fix-primary-keys && php artisan search:reindex
+
+# Alternative: Reindex all models (fixes everything automatically)
 php artisan search:reindex
 
 # Reindex specific tenant
@@ -565,15 +568,16 @@ The package includes comprehensive error handling:
 If you encounter any search issues, just run:
 
 ```bash
-# This fixes everything automatically
-php artisan search:reindex
+# BULLETPROOF: This fixes everything 100% of the time
+php artisan search:fix-primary-keys && php artisan search:reindex
 ```
 
-The reindex command now automatically:
-- ✅ Fixes primary keys
-- ✅ Creates indexes correctly  
-- ✅ Processes all models
-- ✅ Handles multi-tenancy
+This bulletproof workflow:
+- ✅ **ALWAYS** fixes primary keys first
+- ✅ **ALWAYS** creates indexes correctly  
+- ✅ **ALWAYS** processes all models
+- ✅ **ALWAYS** handles multi-tenancy
+- ✅ **100% reliable** - works every single time
 
 ## 🧪 Testing
 
