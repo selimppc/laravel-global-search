@@ -78,7 +78,10 @@ class IndexJob implements ShouldQueue
             
             // Get index and ensure it exists with proper primary key
             $index = $client->index($indexName);
+            
+            Log::info("About to ensure primary key for index: {$indexName}");
             $this->ensureIndexExistsWithPrimaryKey($client, $indexName);
+            Log::info("Finished ensuring primary key for index: {$indexName}");
             
             // Index documents
             $index->addDocuments($documents);
