@@ -82,28 +82,8 @@ class IndexJob implements ShouldQueue
             // Always ensure index exists with correct primary key
             $this->ensureIndexWithPrimaryKey($client, $indexName, $primaryKey);
             
-            // Get the index and add documents
-            $index = $client->index($indexName);
-            
-            // Verify the index has the correct primary key before adding documents
-            $settings = $index->getSettings();
-            $currentPrimaryKey = $settings['primaryKey'] ?? null;
-            
-            if ($currentPrimaryKey !== $primaryKey) {
-                Log::warning("Index {$indexName} still has wrong primary key '{$currentPrimaryKey}' after fix attempt");
-                // Force recreate the index
-                $client->deleteIndex($indexName);
-                $client->createIndex($indexName, ['primaryKey' => $primaryKey]);
-                $index = $client->index($indexName);
-                Log::info("Force recreated index {$indexName} with primary key '{$primaryKey}'");
-            }
-            
-            // Final verification - if still wrong, log error but continue
-            $finalSettings = $index->getSettings();
-            $finalPrimaryKey = $finalSettings['primaryKey'] ?? null;
-            if ($finalPrimaryKey !== $primaryKey) {
-                Log::error("CRITICAL: Index {$indexName} still has wrong primary key '{$finalPrimaryKey}' after all attempts. Manual fix required.");
-            }
+            // Get the index and add documents with retry logic
+            $index = $this->getIndexWithRetry($client, $indexName, $primaryKey);
             
             $index->addDocuments($documents);
             
@@ -263,5 +243,49 @@ class IndexJob implements ShouldQueue
 
         // Default to 'id' if no mapping found
         return 'id';
+    }
+    
+    private function getIndexWithRetry($client, string $indexName, string $primaryKey)
+    {
+        $maxAttempts = 5;
+        $attempt = 0;
+        
+        while ($attempt < $maxAttempts) {
+            try {
+                $index = $client->index($indexName);
+                
+                // Verify the index has the correct primary key
+                $settings = $index->getSettings();
+                $currentPrimaryKey = $settings['primaryKey'] ?? null;
+                
+                if ($currentPrimaryKey === $primaryKey) {
+                    return $index;
+                }
+                
+                // If primary key is wrong, recreate the index
+                Log::warning("Index {$indexName} has wrong primary key '{$currentPrimaryKey}', recreating with '{$primaryKey}'");
+                $client->deleteIndex($indexName);
+                $client->createIndex($indexName, ['primaryKey' => $primaryKey]);
+                
+                // Wait a bit for the index to be ready
+                usleep(200000); // Wait 200ms
+                
+                $index = $client->index($indexName);
+                return $index;
+                
+            } catch (\Exception $e) {
+                $attempt++;
+                
+                if ($attempt >= $maxAttempts) {
+                    Log::error("Failed to get index {$indexName} after {$maxAttempts} attempts: {$e->getMessage()}");
+                    throw $e;
+                }
+                
+                Log::warning("Attempt {$attempt} failed to get index {$indexName}: {$e->getMessage()}. Retrying...");
+                usleep(500000); // Wait 500ms before retry
+            }
+        }
+        
+        throw new \Exception("Failed to get index {$indexName} after {$maxAttempts} attempts");
     }
 }

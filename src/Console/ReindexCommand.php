@@ -310,6 +310,10 @@ class ReindexCommand extends Command
                     $this->warn("Index {$indexName} has wrong primary key '{$currentPrimaryKey}', recreating with '{$primaryKey}'");
                     $client->deleteIndex($indexName);
                     $client->createIndex($indexName, ['primaryKey' => $primaryKey]);
+                    
+                    // Wait for index to be fully created to avoid race conditions
+                    $this->waitForIndexCreation($client, $indexName, $primaryKey);
+                    
                     $this->info("✅ Fixed index {$indexName} with primary key '{$primaryKey}'");
                 } else {
                     $this->info("Index {$indexName} already has correct primary key '{$primaryKey}'");
@@ -317,8 +321,39 @@ class ReindexCommand extends Command
             } catch (\Exception $e) {
                 $this->info("Index {$indexName} doesn't exist, creating it with primary key '{$primaryKey}'");
                 $client->createIndex($indexName, ['primaryKey' => $primaryKey]);
+                
+                // Wait for index to be fully created to avoid race conditions
+                $this->waitForIndexCreation($client, $indexName, $primaryKey);
+                
                 $this->info("✅ Created index {$indexName} with primary key '{$primaryKey}'");
             }
         }
+    }
+    
+    private function waitForIndexCreation($client, string $indexName, string $primaryKey): void
+    {
+        $maxAttempts = 10;
+        $attempt = 0;
+        
+        while ($attempt < $maxAttempts) {
+            try {
+                $index = $client->index($indexName);
+                $settings = $index->getSettings();
+                $currentPrimaryKey = $settings['primaryKey'] ?? null;
+                
+                if ($currentPrimaryKey === $primaryKey) {
+                    // Index is ready with correct primary key
+                    return;
+                }
+                
+                $attempt++;
+                usleep(100000); // Wait 100ms
+            } catch (\Exception $e) {
+                $attempt++;
+                usleep(100000); // Wait 100ms
+            }
+        }
+        
+        $this->warn("Index {$indexName} may not be fully ready after {$maxAttempts} attempts");
     }
 }
