@@ -25,6 +25,9 @@ class ReindexCommand extends Command
             $this->info('🔧 Ensuring primary keys are set correctly...');
             $this->fixPrimaryKeysDirectly($tenant, $all);
             
+            // Clean up any non-tenant indexes if multi-tenancy is enabled
+            $this->cleanupNonTenantIndexes();
+            
             if ($all) {
                 $this->reindexAllTenants($searchService, $tenantResolver, $force);
             } else {
@@ -292,13 +295,23 @@ class ReindexCommand extends Command
 
     private function processIndexesForPrimaryKeys($client, array $mappings, ?string $tenantId): void
     {
+        // Check if multi-tenancy is enabled
+        $config = config('global-search');
+        $multiTenantEnabled = $config['tenant']['enabled'] ?? false;
+        
         foreach ($mappings as $mapping) {
             $baseIndexName = $mapping['index'];
             $primaryKey = $mapping['primaryKey'] ?? $mapping['primary_key'] ?? 'id';
 
-            $indexName = $baseIndexName;
-            if ($tenantId) {
+            // Only create tenant-specific indexes if multi-tenancy is enabled and we have a tenant
+            if ($multiTenantEnabled && $tenantId) {
                 $indexName = "{$baseIndexName}_{$tenantId}";
+            } elseif (!$multiTenantEnabled) {
+                // Only create non-tenant indexes if multi-tenancy is disabled
+                $indexName = $baseIndexName;
+            } else {
+                // Skip if multi-tenancy is enabled but no tenant provided
+                continue;
             }
 
             try {
@@ -355,5 +368,36 @@ class ReindexCommand extends Command
         }
         
         $this->warn("Index {$indexName} may not be fully ready after {$maxAttempts} attempts");
+    }
+    
+    private function cleanupNonTenantIndexes(): void
+    {
+        try {
+            $config = config('global-search');
+            $multiTenantEnabled = $config['tenant']['enabled'] ?? false;
+            
+            if (!$multiTenantEnabled) {
+                return; // Don't cleanup if multi-tenancy is disabled
+            }
+            
+            $client = app(\Meilisearch\Client::class);
+            $mappings = $config['mappings'] ?? [];
+            
+            foreach ($mappings as $mapping) {
+                $baseIndexName = $mapping['index'];
+                
+                try {
+                    // Try to get the non-tenant index
+                    $index = $client->index($baseIndexName);
+                    $this->warn("Found non-tenant index '{$baseIndexName}' in multi-tenant mode. Deleting...");
+                    $client->deleteIndex($baseIndexName);
+                    $this->info("✅ Deleted non-tenant index '{$baseIndexName}'");
+                } catch (\Exception $e) {
+                    // Index doesn't exist, which is what we want
+                }
+            }
+        } catch (\Exception $e) {
+            $this->warn("Failed to cleanup non-tenant indexes: {$e->getMessage()}");
+        }
     }
 }
