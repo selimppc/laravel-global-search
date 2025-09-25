@@ -79,9 +79,6 @@ class IndexJob implements ShouldQueue
             // Get primary key from mapping
             $primaryKey = $this->getPrimaryKeyFromMapping();
             
-            // Always ensure index exists with correct primary key
-            $this->ensureIndexWithPrimaryKey($client, $indexName, $primaryKey);
-            
             // Get the index and add documents with retry logic
             $index = $this->getIndexWithRetry($client, $indexName, $primaryKey);
             
@@ -200,33 +197,6 @@ class IndexJob implements ShouldQueue
         }
     }
     
-    private function ensureIndexWithPrimaryKey($client, string $indexName, string $primaryKey): void
-    {
-        try {
-            // Check if index exists and has correct primary key
-            try {
-                $index = $client->index($indexName);
-                $settings = $index->getSettings();
-                $currentPrimaryKey = $settings['primaryKey'] ?? null;
-                
-                // If index has wrong/no primary key, delete and recreate
-                if ($currentPrimaryKey !== $primaryKey) {
-                    Log::info("Index {$indexName} has wrong primary key '{$currentPrimaryKey}', recreating with '{$primaryKey}'");
-                    $client->deleteIndex($indexName);
-                    $client->createIndex($indexName, ['primaryKey' => $primaryKey]);
-                    Log::info("Recreated index {$indexName} with primary key '{$primaryKey}'");
-                }
-            } catch (\Exception $e) {
-                // Index doesn't exist, create it with primary key
-                Log::info("Creating index {$indexName} with primary key '{$primaryKey}'");
-                $client->createIndex($indexName, ['primaryKey' => $primaryKey]);
-                Log::info("Created index {$indexName} with primary key '{$primaryKey}'");
-            }
-        } catch (\Exception $e) {
-            Log::error("Failed to ensure index with primary key for {$indexName}: {$e->getMessage()}");
-            // Don't throw - continue with indexing even if index creation fails
-        }
-    }
 
     private function getPrimaryKeyFromMapping(): ?string
     {
@@ -252,24 +222,6 @@ class IndexJob implements ShouldQueue
         
         while ($attempt < $maxAttempts) {
             try {
-                $index = $client->index($indexName);
-                
-                // Verify the index has the correct primary key
-                $settings = $index->getSettings();
-                $currentPrimaryKey = $settings['primaryKey'] ?? null;
-                
-                if ($currentPrimaryKey === $primaryKey) {
-                    return $index;
-                }
-                
-                // If primary key is wrong, recreate the index
-                Log::warning("Index {$indexName} has wrong primary key '{$currentPrimaryKey}', recreating with '{$primaryKey}'");
-                $client->deleteIndex($indexName);
-                $client->createIndex($indexName, ['primaryKey' => $primaryKey]);
-                
-                // Wait a bit for the index to be ready
-                usleep(200000); // Wait 200ms
-                
                 $index = $client->index($indexName);
                 return $index;
                 
