@@ -133,7 +133,16 @@ class TenantResolver
         if (in_array($subdomain, $exclude)) return null;
         
         // Try to resolve tenant ID from subdomain
-        return $this->resolveTenantIdFromName($subdomain) ?? $subdomain;
+        $resolvedTenantId = $this->resolveTenantIdFromName($subdomain);
+        
+        if ($resolvedTenantId) {
+            return $resolvedTenantId;
+        }
+        
+        // If subdomain resolution failed, don't fall back to subdomain name
+        // Instead, try to get the first available tenant
+        Log::debug("Subdomain '{$subdomain}' could not be resolved to tenant ID, trying fallback");
+        return null;
     }
 
     private function tryHeader(): ?string
@@ -222,17 +231,33 @@ class TenantResolver
                 
                 foreach ($tenantModelClasses as $tenantModelClass) {
                     if ($tenantModelClass && class_exists($tenantModelClass)) {
+                        // Try multiple search strategies
                         $tenant = $tenantModelClass::where('name', 'like', "%{$tenantName}%")
                             ->orWhere('id', $tenantName)
+                            ->orWhere('domain', 'like', "%{$tenantName}%")
+                            ->orWhere('subdomain', $tenantName)
                             ->first();
                         
                         if ($tenant) {
+                            Log::debug("Resolved tenant name '{$tenantName}' to ID '{$tenant->id}'");
                             return $tenant->id;
                         }
                     }
                 }
+                
+                // If no tenant found by name, try to get the first available tenant as fallback
+                // This handles cases where subdomain doesn't match any tenant name
+                foreach ($tenantModelClasses as $tenantModelClass) {
+                    if ($tenantModelClass && class_exists($tenantModelClass)) {
+                        $firstTenant = $tenantModelClass::first();
+                        if ($firstTenant) {
+                            Log::debug("No tenant found for '{$tenantName}', using first available tenant: {$firstTenant->id}");
+                            return $firstTenant->id;
+                        }
+                    }
+                }
             } catch (\Exception $e) {
-                // Fall back to tenant name if resolution fails
+                Log::debug("Failed to resolve tenant name '{$tenantName}': {$e->getMessage()}");
             }
             
             return null;

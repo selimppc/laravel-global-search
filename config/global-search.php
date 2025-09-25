@@ -214,7 +214,7 @@ return [
         
         // Database configuration (when source is 'database')
         'model' => env('GLOBAL_SEARCH_TENANT_MODEL', 'App\\Models\\Tenant'),
-        'identifier_column' => env('GLOBAL_SEARCH_TENANT_IDENTIFIER', 'name'),
+        'identifier_column' => env('GLOBAL_SEARCH_TENANT_IDENTIFIER', 'id'),
         
         // Configuration list (when source is 'config')
         'list' => [
