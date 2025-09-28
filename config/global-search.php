@@ -43,6 +43,18 @@ return [
     | Define how your Eloquent models should be mapped to search indexes.
     | Each mapping specifies which fields to index and how to transform them.
     |
+    | IMPORTANT: For filtering to work, you MUST:
+    | 1. Add fields to the 'fields' array that you want to search/filter
+    | 2. Add filterable fields to the 'filterable' array
+    | 3. Add corresponding 'filterableAttributes' in the index_settings below
+    | 4. Run: php artisan search:sync-settings && php artisan search:reindex
+    |
+    | FILTERING EXAMPLES:
+    | - Basic: filters[status]=active
+    | - Multiple: filters[user_type]=Client&filters[is_approved]=1
+    | - Arrays: filters[category][]=electronics&filters[category][]=phones
+    | - Date ranges: filters[created_at][gte]=2024-01-01&filters[created_at][lte]=2024-12-31
+    |
     */
     'mappings' => [
         // Example Product mapping - replace with your actual models
@@ -79,46 +91,44 @@ return [
             'sortable' => ['created_at', 'title'],
         ],
 
-        // Example User mapping
+        // Example User mapping - Replace with your actual User model
         [
-            'model' => \Modules\User\Models\User::class,
+            'model' => App\Models\User::class, // Change to your User model
             'index' => 'users',
             'primaryKey' => 'id',
             'fields' => [
-                'id', 'user_unique_id', 'first_name', 'last_name', 'name', 'email', 
-                'user_type', 'status', 'is_approved', 'is_super_admin', 'is_without_email', 
-                'should_update_password', 'phone', 'created_at', 'updated_at'
+                'id', 'name', 'email', 'created_at', 'updated_at'
+                // Add your custom fields here: 'user_type', 'status', 'phone', etc.
             ],
             'computed' => [
                 'url' => fn($model) => route('users.show', $model->id),
                 'avatar' => fn($model) => $model->avatar_url ?? null,
             ],
             'filterable' => [
-                'user_type', 'status', 'is_approved', 'is_super_admin', 
-                'is_without_email', 'should_update_password', 'created_at', 'updated_at'
+                'created_at', 'updated_at'
+                // Add your filterable fields here: 'user_type', 'status', 'is_approved', etc.
             ],
-            'sortable' => ['name', 'created_at', 'updated_at', 'user_type'],
+            'sortable' => ['name', 'created_at', 'updated_at'],
         ],
 
-        // Properties mapping for real estate
+        // Example Product mapping - Replace with your actual Product model
         [
-            'model' => \Modules\Property\Models\Property::class,
-            'index' => 'properties',
+            'model' => App\Models\Product::class, // Change to your Product model
+            'index' => 'products',
             'primaryKey' => 'id',
             'fields' => [
-                'id', 'title', 'mls_id', 'description', 'price', 'bedrooms', 'bathrooms',
-                'square_feet', 'lot_size', 'year_built', 'property_type', 'status',
-                'address', 'city', 'state', 'zip_code', 'created_at', 'updated_at'
+                'id', 'name', 'description', 'price', 'status', 'created_at', 'updated_at'
+                // Add your custom fields here: 'category', 'brand', 'sku', etc.
             ],
             'computed' => [
-                'url' => fn($model) => route('properties.show', $model->id),
+                'url' => fn($model) => route('products.show', $model->id),
                 'thumbnail' => fn($model) => $model->thumbnail_url ?? null,
             ],
             'filterable' => [
-                'property_type', 'status', 'bedrooms', 'bathrooms', 'price',
-                'square_feet', 'year_built', 'city', 'state', 'created_at', 'updated_at'
+                'status', 'price', 'created_at', 'updated_at'
+                // Add your filterable fields here: 'category', 'brand', 'in_stock', etc.
             ],
-            'sortable' => ['price', 'created_at', 'updated_at', 'bedrooms', 'bathrooms'],
+            'sortable' => ['name', 'price', 'created_at', 'updated_at'],
         ],
     ],
 
@@ -129,6 +139,14 @@ return [
     |
     | Configure Meilisearch index settings for each of your indexes.
     | These settings control how Meilisearch processes and searches your data.
+    |
+    | CRITICAL FOR FILTERING:
+    | - filterableAttributes: Fields that can be used in filters
+    | - sortableAttributes: Fields that can be used for sorting
+    | - searchableAttributes: Fields that are searched when querying
+    |
+    | After changing these settings, run:
+    | php artisan search:sync-settings && php artisan search:reindex
     |
     */
     'index_settings' => [
@@ -157,26 +175,20 @@ return [
             ],
         ],
         'users' => [
-            'searchableAttributes' => ['first_name', 'last_name', 'name', 'email', 'phone'],
+            'searchableAttributes' => ['name', 'email'],
             'displayedAttributes' => ['*'],
-            'filterableAttributes' => [
-                'user_type', 'status', 'is_approved', 'is_super_admin', 
-                'is_without_email', 'should_update_password', 'created_at', 'updated_at'
-            ],
-            'sortableAttributes' => ['name', 'created_at', 'updated_at', 'user_type'],
+            'filterableAttributes' => ['created_at', 'updated_at'],
+            'sortableAttributes' => ['name', 'created_at', 'updated_at'],
             'typoTolerance' => [
                 'enabled' => true,
                 'minWordSizeForTypos' => ['oneTypo' => 3, 'twoTypos' => 6]
             ],
         ],
-        'properties' => [
-            'searchableAttributes' => ['title', 'mls_id', 'description', 'address', 'city', 'state'],
+        'products' => [
+            'searchableAttributes' => ['name', 'description'],
             'displayedAttributes' => ['*'],
-            'filterableAttributes' => [
-                'property_type', 'status', 'bedrooms', 'bathrooms', 'price',
-                'square_feet', 'year_built', 'city', 'state', 'created_at', 'updated_at'
-            ],
-            'sortableAttributes' => ['price', 'created_at', 'updated_at', 'bedrooms', 'bathrooms'],
+            'filterableAttributes' => ['status', 'price', 'created_at', 'updated_at'],
+            'sortableAttributes' => ['name', 'price', 'created_at', 'updated_at'],
             'typoTolerance' => [
                 'enabled' => true,
                 'minWordSizeForTypos' => ['oneTypo' => 4, 'twoTypos' => 8]
