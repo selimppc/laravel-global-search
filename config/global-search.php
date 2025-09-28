@@ -81,16 +81,44 @@ return [
 
         // Example User mapping
         [
-            'model' => App\Models\User::class,
+            'model' => \Modules\User\Models\User::class,
             'index' => 'users',
             'primaryKey' => 'id',
-            'fields' => ['id', 'name', 'email', 'created_at', 'updated_at'],
+            'fields' => [
+                'id', 'user_unique_id', 'first_name', 'last_name', 'name', 'email', 
+                'user_type', 'status', 'is_approved', 'is_super_admin', 'is_without_email', 
+                'should_update_password', 'phone', 'created_at', 'updated_at'
+            ],
             'computed' => [
                 'url' => fn($model) => route('users.show', $model->id),
                 'avatar' => fn($model) => $model->avatar_url ?? null,
             ],
-            'filterable' => ['created_at'],
-            'sortable' => ['name', 'created_at'],
+            'filterable' => [
+                'user_type', 'status', 'is_approved', 'is_super_admin', 
+                'is_without_email', 'should_update_password', 'created_at', 'updated_at'
+            ],
+            'sortable' => ['name', 'created_at', 'updated_at', 'user_type'],
+        ],
+
+        // Properties mapping for real estate
+        [
+            'model' => \Modules\Property\Models\Property::class,
+            'index' => 'properties',
+            'primaryKey' => 'id',
+            'fields' => [
+                'id', 'title', 'mls_id', 'description', 'price', 'bedrooms', 'bathrooms',
+                'square_feet', 'lot_size', 'year_built', 'property_type', 'status',
+                'address', 'city', 'state', 'zip_code', 'created_at', 'updated_at'
+            ],
+            'computed' => [
+                'url' => fn($model) => route('properties.show', $model->id),
+                'thumbnail' => fn($model) => $model->thumbnail_url ?? null,
+            ],
+            'filterable' => [
+                'property_type', 'status', 'bedrooms', 'bathrooms', 'price',
+                'square_feet', 'year_built', 'city', 'state', 'created_at', 'updated_at'
+            ],
+            'sortable' => ['price', 'created_at', 'updated_at', 'bedrooms', 'bathrooms'],
         ],
     ],
 
@@ -129,11 +157,29 @@ return [
             ],
         ],
         'users' => [
-            'searchableAttributes' => ['name', 'email'],
+            'searchableAttributes' => ['first_name', 'last_name', 'name', 'email', 'phone'],
             'displayedAttributes' => ['*'],
+            'filterableAttributes' => [
+                'user_type', 'status', 'is_approved', 'is_super_admin', 
+                'is_without_email', 'should_update_password', 'created_at', 'updated_at'
+            ],
+            'sortableAttributes' => ['name', 'created_at', 'updated_at', 'user_type'],
             'typoTolerance' => [
                 'enabled' => true,
                 'minWordSizeForTypos' => ['oneTypo' => 3, 'twoTypos' => 6]
+            ],
+        ],
+        'properties' => [
+            'searchableAttributes' => ['title', 'mls_id', 'description', 'address', 'city', 'state'],
+            'displayedAttributes' => ['*'],
+            'filterableAttributes' => [
+                'property_type', 'status', 'bedrooms', 'bathrooms', 'price',
+                'square_feet', 'year_built', 'city', 'state', 'created_at', 'updated_at'
+            ],
+            'sortableAttributes' => ['price', 'created_at', 'updated_at', 'bedrooms', 'bathrooms'],
+            'typoTolerance' => [
+                'enabled' => true,
+                'minWordSizeForTypos' => ['oneTypo' => 4, 'twoTypos' => 8]
             ],
         ],
     ],
