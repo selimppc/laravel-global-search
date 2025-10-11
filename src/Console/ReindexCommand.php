@@ -321,11 +321,14 @@ class ReindexCommand extends Command
 
                 if ($currentPrimaryKey !== $primaryKey) {
                     $this->warn("Index {$indexName} has wrong primary key '{$currentPrimaryKey}', recreating with '{$primaryKey}'");
-                    $client->deleteIndex($indexName);
-                    $client->createIndex($indexName, ['primaryKey' => $primaryKey]);
                     
-                    // Wait for index to be fully created to avoid race conditions
-                    $this->waitForIndexCreation($client, $indexName, $primaryKey);
+                    // Delete the old index and wait for completion
+                    $task = $client->deleteIndex($indexName);
+                    $client->waitForTask($task['taskUid']);
+                    
+                    // Create index with correct primary key and wait for completion
+                    $task = $client->createIndex($indexName, ['primaryKey' => $primaryKey]);
+                    $client->waitForTask($task['taskUid']);
                     
                     $this->info("✅ Fixed index {$indexName} with primary key '{$primaryKey}'");
                 } else {
@@ -333,55 +336,14 @@ class ReindexCommand extends Command
                 }
             } catch (\Exception $e) {
                 $this->info("Index {$indexName} doesn't exist, creating it with primary key '{$primaryKey}'");
-                $client->createIndex($indexName, ['primaryKey' => $primaryKey]);
                 
-                // Wait for index to be fully created to avoid race conditions
-                $this->waitForIndexCreation($client, $indexName, $primaryKey);
+                // Create index with correct primary key and wait for completion
+                $task = $client->createIndex($indexName, ['primaryKey' => $primaryKey]);
+                $client->waitForTask($task['taskUid']);
                 
                 $this->info("✅ Created index {$indexName} with primary key '{$primaryKey}'");
             }
         }
-    }
-    
-    private function waitForIndexCreation($client, string $indexName, string $primaryKey): void
-    {
-        $config = config('global-search.pipeline', []);
-        $maxAttempts = $config['max_retry_wait'] ?? 30; // Increased from 10 to 30
-        $retryDelay = $config['retry_delay'] ?? 500; // milliseconds
-        $attempt = 0;
-        
-        $this->line("⏳ Waiting for index {$indexName} to be ready...");
-        
-        while ($attempt < $maxAttempts) {
-            try {
-                $index = $client->index($indexName);
-                $settings = $index->getSettings();
-                $currentPrimaryKey = $settings['primaryKey'] ?? null;
-                
-                if ($currentPrimaryKey === $primaryKey) {
-                    // Index is ready with correct primary key
-                    $this->info("✅ Index {$indexName} is ready with primary key '{$primaryKey}'");
-                    return;
-                }
-                
-                // Log progress every 5 attempts
-                if ($attempt > 0 && $attempt % 5 === 0) {
-                    $this->line("   Still waiting... (attempt {$attempt}/{$maxAttempts})");
-                }
-                
-                $attempt++;
-                usleep($retryDelay * 1000); // Convert milliseconds to microseconds
-            } catch (\Exception $e) {
-                // Index not found yet, continue waiting
-                if ($attempt > 0 && $attempt % 5 === 0) {
-                    $this->line("   Index not found yet... (attempt {$attempt}/{$maxAttempts})");
-                }
-                $attempt++;
-                usleep($retryDelay * 1000);
-            }
-        }
-        
-        $this->warn("⚠️  Index {$indexName} may not be fully ready after {$maxAttempts} attempts. Continuing anyway...");
     }
     
     private function cleanupNonTenantIndexes(): void
