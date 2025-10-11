@@ -48,30 +48,52 @@ class SyncSettingsCommand extends Command
     
     private function syncIndexSettings(Client $client, array $config, ?string $tenant, TenantResolver $tenantResolver): void
     {
-        $indexes = array_keys($config['federation']['indexes'] ?? []);
+        // Get all indexes from mappings
+        $mappings = $config['mappings'] ?? [];
+        $indexSettings = $config['index_settings'] ?? [];
         
-        foreach ($indexes as $indexName) {
-            $tenantIndexName = $tenantResolver->getTenantIndexName($indexName);
+        foreach ($mappings as $mapping) {
+            $indexName = $mapping['index'];
+            $tenantIndexName = $tenantResolver->getTenantIndexName($indexName, $tenant);
             
-            // Get settings for this specific index from mappings
-            $settings = $this->getIndexSettings($config, $indexName);
+            // Get settings from index_settings config
+            $settings = $this->getIndexSettings($indexSettings, $mapping, $indexName);
+            
             if (!empty($settings)) {
-                $client->index($tenantIndexName)->updateSettings($settings);
-                $this->line("✓ Synced settings for index: {$tenantIndexName}");
+                try {
+                    $client->index($tenantIndexName)->updateSettings($settings);
+                    $this->line("✓ Synced settings for index: {$tenantIndexName}");
+                } catch (\Exception $e) {
+                    $this->line("⚠ Failed to sync settings for index: {$tenantIndexName} - {$e->getMessage()}");
+                }
             } else {
                 $this->line("⚠ No settings found for index: {$indexName}");
             }
         }
     }
     
-    private function getIndexSettings(array $config, string $indexName): array
+    private function getIndexSettings(array $indexSettings, array $mapping, string $indexName): array
     {
-        $mappings = $config['mappings'] ?? [];
-        foreach ($mappings as $mapping) {
-            if (strtolower(class_basename($mapping['model'])) === $indexName) {
-                return $mapping['index_settings'] ?? [];
-            }
+        // Priority 1: Check index_settings array for this index
+        if (isset($indexSettings[$indexName])) {
+            return $indexSettings[$indexName];
         }
-        return [];
+        
+        // Priority 2: Build settings from mapping configuration
+        $settings = [];
+        
+        if (!empty($mapping['filterable'])) {
+            $settings['filterableAttributes'] = $mapping['filterable'];
+        }
+        
+        if (!empty($mapping['sortable'])) {
+            $settings['sortableAttributes'] = $mapping['sortable'];
+        }
+        
+        if (!empty($mapping['fields'])) {
+            $settings['searchableAttributes'] = $mapping['fields'];
+        }
+        
+        return $settings;
     }
 }
