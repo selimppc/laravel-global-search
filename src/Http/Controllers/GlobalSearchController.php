@@ -19,10 +19,11 @@ class GlobalSearchController
     {
         $query = $request->get('q', '');
         $filters = $request->get('filters', []);
+        $sort = $request->get('sort', []);
         $limit = min((int) $request->get('limit', 10), 50);
         $tenant = $request->get('tenant');
 
-        $results = $this->searchService->search($query, $filters, $limit, $tenant);
+        $results = $this->searchService->search($query, $filters, $limit, $tenant, $sort);
 
         return response()->json([
             'success' => true,
@@ -30,7 +31,8 @@ class GlobalSearchController
             'meta' => [
                 'query' => $query,
                 'limit' => $limit,
-                'tenant' => $results['meta']['tenant'] ?? $tenant
+                'tenant' => $results['meta']['tenant'] ?? $tenant,
+                'sort' => $sort
             ]
         ]);
     }

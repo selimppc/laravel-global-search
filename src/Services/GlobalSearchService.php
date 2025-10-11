@@ -20,22 +20,22 @@ class GlobalSearchService
         private array $config
     ) {}
 
-    public function search(string $query, array $filters = [], int $limit = 10, ?string $tenant = null): array
+    public function search(string $query, array $filters = [], int $limit = 10, ?string $tenant = null, array $sort = []): array
     {
         try {
             $tenant = $tenant ?? $this->tenantResolver->getCurrentTenant();
             
             // Cache search results for performance (short cache for real-time feel)
-            $cacheKey = $this->buildSearchCacheKey($query, $filters, $limit, $tenant);
+            $cacheKey = $this->buildSearchCacheKey($query, $filters, $limit, $tenant, $sort);
             
-            return Cache::remember($cacheKey, 60, function () use ($query, $filters, $limit, $tenant) { // 1 minute cache
+            return Cache::remember($cacheKey, 60, function () use ($query, $filters, $limit, $tenant, $sort) { // 1 minute cache
                 $indexes = $this->getIndexes();
                 
                 if (empty($indexes)) {
                     return $this->emptyResult($query, $limit);
                 }
 
-                $results = $this->performSearch($query, $filters, $indexes, $limit, $tenant);
+                $results = $this->performSearch($query, $filters, $indexes, $limit, $tenant, $sort);
                 
                 // Log only errors, minimal info logging
                 if (empty($results['hits'])) {
@@ -115,7 +115,7 @@ class GlobalSearchService
         Log::info("Reindex completed: {$totalJobs} jobs dispatched for tenant: " . ($tenant ?? 'default'));
     }
 
-    private function performSearch(string $query, array $filters, array $indexes, int $limit, ?string $tenant): array
+    private function performSearch(string $query, array $filters, array $indexes, int $limit, ?string $tenant, array $sort = []): array
     {
         $client = App::make(Client::class);
         $allHits = [];
@@ -124,7 +124,7 @@ class GlobalSearchService
         foreach ($indexes as $indexName) {
             try {
                 $tenantIndex = $this->tenantResolver->getTenantIndexName($indexName, $tenant);
-                $searchOptions = $this->buildSearchOptions($filters, $limit, $tenant);
+                $searchOptions = $this->buildSearchOptions($filters, $limit, $tenant, $sort);
                 
                 // Get the index first, then call search on it
                 $index = $client->index($tenantIndex);
@@ -172,7 +172,7 @@ class GlobalSearchService
         return array_unique(array_merge($federationIndexes, $mappingIndexes));
     }
 
-    private function buildSearchOptions(array $filters, int $limit, ?string $tenant): array
+    private function buildSearchOptions(array $filters, int $limit, ?string $tenant, array $sort = []): array
     {
         $options = ['limit' => $limit];
         
@@ -184,6 +184,16 @@ class GlobalSearchService
             Log::debug('Meilisearch filter string', [
                 'filters' => $filters,
                 'filter_string' => $filterString
+            ]);
+        }
+        
+        if (!empty($sort)) {
+            $options['sort'] = $this->buildSortArray($sort);
+            
+            // Log sort options for debugging
+            Log::debug('Meilisearch sort options', [
+                'sort' => $sort,
+                'sort_array' => $options['sort']
             ]);
         }
         
@@ -216,6 +226,31 @@ class GlobalSearchService
         return implode(' AND ', $conditions);
     }
 
+    private function buildSortArray(array $sort): array
+    {
+        $sortArray = [];
+        
+        foreach ($sort as $field => $direction) {
+            // If sort is passed as array like ['name' => 'asc', 'created_at' => 'desc']
+            if (is_string($field)) {
+                $direction = strtolower($direction);
+                if (in_array($direction, ['asc', 'desc'])) {
+                    $sortArray[] = "{$field}:{$direction}";
+                }
+            }
+            // If sort is passed as simple array like ['name:asc', 'created_at:desc']
+            elseif (is_string($direction) && str_contains($direction, ':')) {
+                $sortArray[] = $direction;
+            }
+            // If sort is passed as simple field name, default to asc
+            elseif (is_string($direction)) {
+                $sortArray[] = "{$direction}:asc";
+            }
+        }
+        
+        return $sortArray;
+    }
+
     private function emptyResult(string $query, int $limit): array
     {
         return [
@@ -229,13 +264,14 @@ class GlobalSearchService
         ];
     }
 
-    private function buildSearchCacheKey(string $query, array $filters, int $limit, ?string $tenant): string
+    private function buildSearchCacheKey(string $query, array $filters, int $limit, ?string $tenant, array $sort = []): string
     {
         return 'global_search.' . md5(serialize([
             'query' => $query,
             'filters' => $filters,
             'limit' => $limit,
-            'tenant' => $tenant
+            'tenant' => $tenant,
+            'sort' => $sort
         ]));
     }
 
