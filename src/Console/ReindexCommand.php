@@ -346,9 +346,11 @@ class ReindexCommand extends Command
     private function waitForIndexCreation($client, string $indexName, string $primaryKey): void
     {
         $config = config('global-search.pipeline', []);
-        $maxAttempts = $config['max_retry_wait'] ?? 10;
+        $maxAttempts = $config['max_retry_wait'] ?? 30; // Increased from 10 to 30
         $retryDelay = $config['retry_delay'] ?? 500; // milliseconds
         $attempt = 0;
+        
+        $this->line("⏳ Waiting for index {$indexName} to be ready...");
         
         while ($attempt < $maxAttempts) {
             try {
@@ -358,18 +360,28 @@ class ReindexCommand extends Command
                 
                 if ($currentPrimaryKey === $primaryKey) {
                     // Index is ready with correct primary key
+                    $this->info("✅ Index {$indexName} is ready with primary key '{$primaryKey}'");
                     return;
+                }
+                
+                // Log progress every 5 attempts
+                if ($attempt > 0 && $attempt % 5 === 0) {
+                    $this->line("   Still waiting... (attempt {$attempt}/{$maxAttempts})");
                 }
                 
                 $attempt++;
                 usleep($retryDelay * 1000); // Convert milliseconds to microseconds
             } catch (\Exception $e) {
+                // Index not found yet, continue waiting
+                if ($attempt > 0 && $attempt % 5 === 0) {
+                    $this->line("   Index not found yet... (attempt {$attempt}/{$maxAttempts})");
+                }
                 $attempt++;
                 usleep($retryDelay * 1000);
             }
         }
         
-        $this->warn("Index {$indexName} may not be fully ready after {$maxAttempts} attempts");
+        $this->warn("⚠️  Index {$indexName} may not be fully ready after {$maxAttempts} attempts. Continuing anyway...");
     }
     
     private function cleanupNonTenantIndexes(): void

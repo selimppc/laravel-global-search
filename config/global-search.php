@@ -245,7 +245,7 @@ return [
         'soft_delete' => env('GLOBAL_SEARCH_SOFT_DELETE', true),
         'retry_attempts' => env('GLOBAL_SEARCH_RETRY_ATTEMPTS', 3),
         'retry_delay' => env('GLOBAL_SEARCH_RETRY_DELAY', 500), // milliseconds
-        'max_retry_wait' => env('GLOBAL_SEARCH_MAX_RETRY_WAIT', 10), // Max attempts for index creation
+        'max_retry_wait' => env('GLOBAL_SEARCH_MAX_RETRY_WAIT', 30), // Max attempts for index creation (increased to 30)
     ],
     
     /*
