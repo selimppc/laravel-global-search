@@ -77,6 +77,9 @@ class FixPrimaryKeysCommand extends Command
                     $client->deleteIndex($indexName);
                     $client->createIndex($indexName, ['primaryKey' => $primaryKey]);
                     
+                    // Wait for index to be fully created
+                    $this->waitForIndexCreation($client, $indexName, $primaryKey);
+                    
                     $this->info("✅ Fixed index {$indexName} with primary key '{$primaryKey}'");
                 } else {
                     $this->info("✅ Index {$indexName} already has correct primary key '{$primaryKey}'");
@@ -87,11 +90,44 @@ class FixPrimaryKeysCommand extends Command
                     // Index doesn't exist, create it with primary key
                     $this->info("Creating index {$indexName} with primary key '{$primaryKey}'");
                     $client->createIndex($indexName, ['primaryKey' => $primaryKey]);
+                    
+                    // Wait for index to be fully created
+                    $this->waitForIndexCreation($client, $indexName, $primaryKey);
+                    
                     $this->info("✅ Created index {$indexName} with primary key '{$primaryKey}'");
                 } else {
                     $this->error("❌ Failed to fix index {$indexName}: {$e->getMessage()}");
                 }
             }
         }
+    }
+    
+    private function waitForIndexCreation(Client $client, string $indexName, string $primaryKey): void
+    {
+        $config = config('global-search.pipeline', []);
+        $maxAttempts = $config['max_retry_wait'] ?? 10;
+        $retryDelay = $config['retry_delay'] ?? 500; // milliseconds
+        $attempt = 0;
+        
+        while ($attempt < $maxAttempts) {
+            try {
+                $index = $client->index($indexName);
+                $settings = $index->getSettings();
+                $currentPrimaryKey = $settings['primaryKey'] ?? null;
+                
+                if ($currentPrimaryKey === $primaryKey) {
+                    // Index is ready with correct primary key
+                    return;
+                }
+                
+                $attempt++;
+                usleep($retryDelay * 1000); // Convert milliseconds to microseconds
+            } catch (\Exception $e) {
+                $attempt++;
+                usleep($retryDelay * 1000);
+            }
+        }
+        
+        $this->warn("⚠️  Index {$indexName} may not be fully ready after {$maxAttempts} attempts. Continuing anyway...");
     }
 }
