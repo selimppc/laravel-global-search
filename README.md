@@ -300,6 +300,47 @@ class User extends Model
 
 ---
 
+## 🔒 Production Security (IMPORTANT!)
+
+**⚠️ The global search endpoint is PUBLIC by default.** Secure it in production!
+
+### Simple Authentication (Recommended)
+
+Add this to your `routes/api.php`:
+
+```php
+// Protect the search endpoint with authentication
+Route::middleware(['auth:sanctum'])->group(function () {
+    Route::get('/global-search', function(Request $request) {
+        // Force user's tenant for security
+        $tenant = auth()->user()->tenant_id ?? null;
+        
+        return app(\LaravelGlobalSearch\GlobalSearch\Http\Controllers\GlobalSearchController::class)(
+            $request->merge(['tenant' => $tenant])
+        );
+    });
+});
+```
+
+**Usage with token:**
+```bash
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  "https://api.yourdomain.com/global-search?q=search"
+```
+
+### Or Disable in Production
+
+```php
+// routes/api.php - Only enable in development
+if (!app()->environment('production')) {
+    Route::get('/global-search', [GlobalSearchController::class, '__invoke']);
+}
+```
+
+**💡 For more security options, see [CONFIGURATION.md](CONFIGURATION.md)**
+
+---
+
 ## ⚡ Performance Tuning
 
 ### High-Volume Apps
