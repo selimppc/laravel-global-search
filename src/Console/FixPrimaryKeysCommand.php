@@ -37,14 +37,39 @@ class FixPrimaryKeysCommand extends Command
             } else {
                 // Auto-detect tenant if not provided
                 if (!$tenant) {
-                    $tenant = $tenantResolver->getCurrentTenant();
+                    // Try Stancl/Tenancy first (more reliable)
+                    if (class_exists(\Stancl\Tenancy\Tenancy::class)) {
+                        try {
+                            $stancl = app(\Stancl\Tenancy\Tenancy::class);
+                            if ($stancl->tenant) {
+                                $tenant = $stancl->tenant->getTenantKey();
+                                $this->info("🔍 Auto-detected tenant from Stancl/Tenancy: {$tenant}");
+                            } else {
+                                // Get first tenant from Stancl
+                                if (class_exists(\Stancl\Tenancy\Models\Tenant::class)) {
+                                    $firstTenant = \Stancl\Tenancy\Models\Tenant::first();
+                                    if ($firstTenant) {
+                                        $tenant = $firstTenant->getTenantKey();
+                                        $this->info("🔍 Auto-detected first tenant: {$tenant}");
+                                    }
+                                }
+                            }
+                        } catch (\Exception $e) {
+                            $this->warn("⚠️  Could not detect tenant from Stancl/Tenancy: {$e->getMessage()}");
+                        }
+                    }
                     
-                    // If still no tenant and multi-tenancy is enabled, use first tenant
-                    if (!$tenant && $multiTenantEnabled) {
-                        $tenants = $tenantResolver->getAllTenants();
-                        if (!empty($tenants)) {
-                            $tenant = $tenants[0];
-                            $this->info("🔍 Auto-detected tenant: {$tenant}");
+                    // Fallback to TenantResolver
+                    if (!$tenant) {
+                        $tenant = $tenantResolver->getCurrentTenant();
+                        
+                        // If still no tenant and multi-tenancy is enabled, use first tenant
+                        if (!$tenant && $multiTenantEnabled) {
+                            $tenants = $tenantResolver->getAllTenants();
+                            if (!empty($tenants)) {
+                                $tenant = $tenants[0];
+                                $this->info("🔍 Auto-detected tenant: {$tenant}");
+                            }
                         }
                     }
                 }
