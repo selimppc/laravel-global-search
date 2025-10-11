@@ -50,15 +50,25 @@ Edit `config/global-search.php`:
 ],
 ```
 
-### 4. Index & Search
+### 4. Sync Settings & Index
 
 ```bash
-# Index your data
+# Step 1: Sync settings to Meilisearch (REQUIRED for filters/sorting)
+php artisan search:sync-settings
+
+# Step 2: Index your data
 php artisan search:reindex
 
-# Run queue worker
-php artisan queue:work
+# Step 3: Process the queue
+php artisan queue:work --stop-when-empty
 ```
+
+> **⚠️ Important:** Always run `search:sync-settings` **before** indexing when you:
+> - First set up the package
+> - Change filterable/sortable attributes in config
+> - Add new indexes or modify index settings
+>
+> **Without syncing settings, filters and sorting will NOT work!**
 
 ```php
 // Search via API
@@ -217,9 +227,17 @@ Automatic detection from:
 ### Apply settings:
 
 ```bash
+# Step 1: Sync settings first (REQUIRED!)
 php artisan search:sync-settings
+
+# Step 2: Reindex data
 php artisan search:reindex
+
+# Step 3: Process queue
+php artisan queue:work --stop-when-empty
 ```
+
+> **💡 Tip:** After changing any filterable/sortable attributes in your config, always run `search:sync-settings` first!
 
 ### Use in API:
 
