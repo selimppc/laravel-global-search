@@ -32,7 +32,23 @@ return [
             'users' => ['weight' => 2.0],
         ],
         'default_limit' => env('GLOBAL_SEARCH_DEFAULT_LIMIT', 10),
-        'max_limit' => env('GLOBAL_SEARCH_MAX_LIMIT', 50),
+        'max_limit' => env('GLOBAL_SEARCH_MAX_LIMIT', 100),
+    ],
+    
+    /*
+    |--------------------------------------------------------------------------
+    | Data Transformation Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Control how data is transformed during indexing.
+    |
+    */
+    'transformation' => [
+        'add_metadata' => env('GLOBAL_SEARCH_ADD_METADATA', true), // Add _search_metadata field
+        'add_tenant_id' => env('GLOBAL_SEARCH_ADD_TENANT_ID', true), // Add tenant_id field
+        'clean_null_values' => env('GLOBAL_SEARCH_CLEAN_NULLS', false), // Remove null values
+        'clean_empty_strings' => env('GLOBAL_SEARCH_CLEAN_EMPTY', false), // Remove empty strings
+        'max_relationship_items' => env('GLOBAL_SEARCH_MAX_RELATIONSHIP_ITEMS', 10), // Max items in relationships
     ],
 
     /*
@@ -207,9 +223,9 @@ return [
     */
     'cache' => [
         'enabled' => env('GLOBAL_SEARCH_CACHE_ENABLED', true),
-        'store' => env('GLOBAL_SEARCH_CACHE_STORE', 'redis'),
-        'ttl' => env('GLOBAL_SEARCH_CACHE_TTL', 60), // minutes
-        'version_key_prefix' => 'gs:index:',
+        'store' => env('GLOBAL_SEARCH_CACHE_STORE', null), // null = use default cache driver
+        'ttl' => env('GLOBAL_SEARCH_CACHE_TTL', 60), // seconds
+        'version_key_prefix' => env('GLOBAL_SEARCH_CACHE_PREFIX', 'gs:index:'),
     ],
 
     /*
@@ -224,10 +240,27 @@ return [
     'pipeline' => [
         'queue' => env('GLOBAL_SEARCH_QUEUE', 'default'),
         'batch_size' => env('GLOBAL_SEARCH_BATCH_SIZE', 1000),
+        'chunk_size' => env('GLOBAL_SEARCH_CHUNK_SIZE', 100), // Models per chunk when indexing
         'max_jobs_per_tick' => env('GLOBAL_SEARCH_MAX_JOBS_PER_TICK', 5),
         'soft_delete' => env('GLOBAL_SEARCH_SOFT_DELETE', true),
         'retry_attempts' => env('GLOBAL_SEARCH_RETRY_ATTEMPTS', 3),
-        'retry_delay' => env('GLOBAL_SEARCH_RETRY_DELAY', 60), // seconds
+        'retry_delay' => env('GLOBAL_SEARCH_RETRY_DELAY', 500), // milliseconds
+        'max_retry_wait' => env('GLOBAL_SEARCH_MAX_RETRY_WAIT', 10), // Max attempts for index creation
+    ],
+    
+    /*
+    |--------------------------------------------------------------------------
+    | Performance Monitoring Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Configure performance monitoring and metrics collection.
+    |
+    */
+    'performance' => [
+        'enabled' => env('GLOBAL_SEARCH_PERFORMANCE_MONITORING', true),
+        'max_metrics_entries' => env('GLOBAL_SEARCH_MAX_METRICS', 100), // Max metrics to store
+        'log_slow_queries' => env('GLOBAL_SEARCH_LOG_SLOW_QUERIES', true),
+        'slow_query_threshold' => env('GLOBAL_SEARCH_SLOW_QUERY_THRESHOLD', 1000), // milliseconds
     ],
 
     /*

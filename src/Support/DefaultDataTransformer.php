@@ -29,8 +29,8 @@ class DefaultDataTransformer implements DataTransformer
         // Add relationships
         $data = $this->addRelationships($model, $data);
         
-        // Add tenant context
-        if ($tenant) {
+        // Add tenant context (configurable)
+        if ($tenant && config('global-search.transformation.add_tenant_id', true)) {
             $data['tenant_id'] = $tenant;
         }
         
@@ -167,7 +167,8 @@ class DefaultDataTransformer implements DataTransformer
         }
         
         $fields = $config['fields'] ?? ['id', 'name'];
-        $maxItems = $config['max_items'] ?? 10;
+        // Use global transformation config if not specified per-relationship
+        $maxItems = $config['max_items'] ?? config('global-search.transformation.max_relationship_items', 10);
         
         if ($relation instanceof \Illuminate\Database\Eloquent\Collection) {
             return $relation->take($maxItems)->map(function ($item) use ($fields) {
@@ -180,6 +181,11 @@ class DefaultDataTransformer implements DataTransformer
 
     private function addMetadata($model, array $data): array
     {
+        // Check if metadata should be added
+        if (!config('global-search.transformation.add_metadata', true)) {
+            return $data;
+        }
+        
         // Use computed URL if it exists, otherwise generate one
         $url = $data['url'] ?? $this->generateUrl($model);
         
@@ -207,10 +213,21 @@ class DefaultDataTransformer implements DataTransformer
 
     private function cleanData(array $data): array
     {
-        // Remove null values and empty strings
-        $data = array_filter($data, function ($value) {
-            return $value !== null && $value !== '';
-        });
+        $cleanNulls = config('global-search.transformation.clean_null_values', false);
+        $cleanEmpty = config('global-search.transformation.clean_empty_strings', false);
+        
+        // Conditionally remove null values and empty strings
+        if ($cleanNulls || $cleanEmpty) {
+            $data = array_filter($data, function ($value) use ($cleanNulls, $cleanEmpty) {
+                if ($cleanNulls && $value === null) {
+                    return false;
+                }
+                if ($cleanEmpty && $value === '') {
+                    return false;
+                }
+                return true;
+            });
+        }
         
         // Convert objects to arrays
         array_walk_recursive($data, function (&$value) {

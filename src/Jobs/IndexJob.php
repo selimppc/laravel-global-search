@@ -40,9 +40,11 @@ class IndexJob implements ShouldQueue
             
             $client = App::make(Client::class);
             
-            // Process models in chunks for better memory usage
+            // Process models in chunks for better memory usage (configurable)
+            $config = config('global-search.pipeline', []);
+            $chunkSize = $config['chunk_size'] ?? 100;
+            
             $documents = [];
-            $chunkSize = 100; // Process 100 models at a time
             
             foreach (array_chunk($this->modelIds, $chunkSize) as $chunk) {
                 $models = $this->modelClass::whereIn('id', $chunk)->get();
@@ -217,7 +219,9 @@ class IndexJob implements ShouldQueue
     
     private function getIndexWithRetry($client, string $indexName, string $primaryKey)
     {
-        $maxAttempts = 5;
+        $config = config('global-search.pipeline', []);
+        $maxAttempts = $config['retry_attempts'] ?? 3;
+        $retryDelay = $config['retry_delay'] ?? 500; // milliseconds
         $attempt = 0;
         
         while ($attempt < $maxAttempts) {
@@ -234,7 +238,7 @@ class IndexJob implements ShouldQueue
                 }
                 
                 Log::warning("Attempt {$attempt} failed to get index {$indexName}: {$e->getMessage()}. Retrying...");
-                usleep(500000); // Wait 500ms before retry
+                usleep($retryDelay * 1000); // Convert milliseconds to microseconds
             }
         }
         

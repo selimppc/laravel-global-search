@@ -345,7 +345,9 @@ class ReindexCommand extends Command
     
     private function waitForIndexCreation($client, string $indexName, string $primaryKey): void
     {
-        $maxAttempts = 10;
+        $config = config('global-search.pipeline', []);
+        $maxAttempts = $config['max_retry_wait'] ?? 10;
+        $retryDelay = $config['retry_delay'] ?? 500; // milliseconds
         $attempt = 0;
         
         while ($attempt < $maxAttempts) {
@@ -360,10 +362,10 @@ class ReindexCommand extends Command
                 }
                 
                 $attempt++;
-                usleep(100000); // Wait 100ms
+                usleep($retryDelay * 1000); // Convert milliseconds to microseconds
             } catch (\Exception $e) {
                 $attempt++;
-                usleep(100000); // Wait 100ms
+                usleep($retryDelay * 1000);
             }
         }
         

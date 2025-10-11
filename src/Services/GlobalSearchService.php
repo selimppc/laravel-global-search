@@ -25,24 +25,25 @@ class GlobalSearchService
         try {
             $tenant = $tenant ?? $this->tenantResolver->getCurrentTenant();
             
-            // Cache search results for performance (short cache for real-time feel)
+            // Use configured cache TTL
+            $cacheTtl = $this->config['cache']['ttl'] ?? 60;
+            $cacheEnabled = $this->config['cache']['enabled'] ?? true;
+            
+            if (!$cacheEnabled) {
+                return $this->performSearchQuery($query, $filters, $limit, $tenant, $sort);
+            }
+            
+            // Cache search results for performance
             $cacheKey = $this->buildSearchCacheKey($query, $filters, $limit, $tenant, $sort);
             
-            return Cache::remember($cacheKey, 60, function () use ($query, $filters, $limit, $tenant, $sort) { // 1 minute cache
+            return Cache::remember($cacheKey, $cacheTtl, function () use ($query, $filters, $limit, $tenant, $sort) {
                 $indexes = $this->getIndexes();
                 
                 if (empty($indexes)) {
                     return $this->emptyResult($query, $limit);
                 }
 
-                $results = $this->performSearch($query, $filters, $indexes, $limit, $tenant, $sort);
-                
-                // Log only errors, minimal info logging
-                if (empty($results['hits'])) {
-                    Log::error('Search returned no results', compact('query', 'tenant', 'filters'));
-                }
-
-                return $results;
+                return $this->performSearchQuery($query, $filters, $limit, $tenant, $sort);
             });
 
         } catch (\Exception $e) {
@@ -54,6 +55,24 @@ class GlobalSearchService
             
             return $this->emptyResult($query, $limit);
         }
+    }
+    
+    private function performSearchQuery(string $query, array $filters, int $limit, ?string $tenant, array $sort): array
+    {
+        $indexes = $this->getIndexes();
+        
+        if (empty($indexes)) {
+            return $this->emptyResult($query, $limit);
+        }
+
+        $results = $this->performSearch($query, $filters, $indexes, $limit, $tenant, $sort);
+        
+        // Log only errors, minimal info logging
+        if (empty($results['hits'])) {
+            Log::error('Search returned no results', compact('query', 'tenant', 'filters'));
+        }
+
+        return $results;
     }
 
     public function indexModel($model, ?string $tenant = null): void
@@ -117,6 +136,7 @@ class GlobalSearchService
 
     private function performSearch(string $query, array $filters, array $indexes, int $limit, ?string $tenant, array $sort = []): array
     {
+        $startTime = microtime(true);
         $client = App::make(Client::class);
         $allHits = [];
         $totalHits = 0;
@@ -150,6 +170,20 @@ class GlobalSearchService
         // Sort by score and limit
         usort($allHits, fn($a, $b) => ($b['_score'] ?? 0) <=> ($a['_score'] ?? 0));
         $limitedHits = array_slice($allHits, 0, $limit);
+        
+        // Log slow queries (configurable)
+        $duration = (microtime(true) - $startTime) * 1000; // milliseconds
+        $perfConfig = $this->config['performance'] ?? [];
+        if (($perfConfig['log_slow_queries'] ?? true) && $duration > ($perfConfig['slow_query_threshold'] ?? 1000)) {
+            Log::warning('Slow search query detected', [
+                'query' => $query,
+                'duration_ms' => round($duration, 2),
+                'filters' => $filters,
+                'indexes' => array_keys($indexes),
+                'tenant' => $tenant,
+                'hits' => count($limitedHits)
+            ]);
+        }
 
         return [
             'hits' => $limitedHits,
@@ -158,7 +192,8 @@ class GlobalSearchService
                 'indexes' => array_keys($indexes),
                 'query' => $query,
                 'limit' => $limit,
-                'tenant' => $tenant
+                'tenant' => $tenant,
+                'duration_ms' => round($duration, 2)
             ]
         ];
     }

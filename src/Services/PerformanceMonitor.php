@@ -73,12 +73,15 @@ class PerformanceMonitor
             'memory_used' => $metrics['memory_used'],
         ];
         
-        // Keep only last 100 entries
-        if (count($existing) > 100) {
-            $existing = array_slice($existing, -100);
+        // Keep only last N entries (configurable)
+        $maxEntries = config('global-search.performance.max_metrics_entries', 100);
+        if (count($existing) > $maxEntries) {
+            $existing = array_slice($existing, -$maxEntries);
         }
         
-        Cache::put($cacheKey, $existing, 3600); // 1 hour
+        // Cache TTL from config
+        $cacheTtl = config('global-search.cache.ttl', 3600);
+        Cache::put($cacheKey, $existing, $cacheTtl);
     }
 
     private function getAverageSearchTime(): float

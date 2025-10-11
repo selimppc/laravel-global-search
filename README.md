@@ -2,7 +2,12 @@
 
 A modern, minimal Laravel package for global search functionality with Meilisearch integration. **No complex setup required** - just add the trait to your models and you're ready to go!
 
-> **Latest Update (v1.1.18)**: Bulletproof workflow - `php artisan search:fix-primary-keys && php artisan search:reindex` ensures 100% reliable indexing.
+> **Latest Update (v1.1.29)**: 🚀 **Fully Dynamic & Configurable** - Zero hardcoded values! Every aspect of the package is now user-configurable via environment variables.
+
+## 📖 Documentation
+
+- **[Configuration Guide](CONFIGURATION.md)** - Complete reference for all 30+ configuration options
+- **[Changelog](CHANGELOG.md)** - Version history and upgrade guides
 
 ## 🚀 Quick Start
 
