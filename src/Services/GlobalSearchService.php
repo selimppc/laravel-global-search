@@ -177,7 +177,14 @@ class GlobalSearchService
         $options = ['limit' => $limit];
         
         if (!empty($filters)) {
-            $options['filter'] = $this->buildFilterString($filters);
+            $filterString = $this->buildFilterString($filters);
+            $options['filter'] = $filterString;
+            
+            // Log filter string for debugging
+            Log::debug('Meilisearch filter string', [
+                'filters' => $filters,
+                'filter_string' => $filterString
+            ]);
         }
         
         // Don't add tenant filter when using tenant-specific indexes
@@ -191,9 +198,19 @@ class GlobalSearchService
         $conditions = [];
         foreach ($filters as $field => $value) {
             if (is_array($value)) {
-                $conditions[] = "{$field} IN (" . implode(', ', $value) . ")";
+                // Handle array values (IN clause)
+                $quotedValues = array_map(function($v) {
+                    return is_string($v) ? "'{$v}'" : $v;
+                }, $value);
+                $conditions[] = "{$field} IN [" . implode(', ', $quotedValues) . "]";
             } else {
-                $conditions[] = "{$field} = {$value}";
+                // Handle single values
+                // Quote string values, but not numbers or booleans
+                if (is_string($value) && !is_numeric($value)) {
+                    $conditions[] = "{$field} = '{$value}'";
+                } else {
+                    $conditions[] = "{$field} = {$value}";
+                }
             }
         }
         return implode(' AND ', $conditions);
