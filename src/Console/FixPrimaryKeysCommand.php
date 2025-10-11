@@ -19,6 +19,8 @@ class FixPrimaryKeysCommand extends Command
 
         try {
             $client = app(Client::class);
+            $config = config('global-search');
+            $multiTenantEnabled = $config['tenant']['enabled'] ?? false;
             
             if ($all) {
                 $this->info('Fixing primary keys for all tenants...');
@@ -33,9 +35,26 @@ class FixPrimaryKeysCommand extends Command
                     }
                 }
             } else {
+                // Auto-detect tenant if not provided
                 if (!$tenant) {
                     $tenant = $tenantResolver->getCurrentTenant();
+                    
+                    // If still no tenant and multi-tenancy is enabled, use first tenant
+                    if (!$tenant && $multiTenantEnabled) {
+                        $tenants = $tenantResolver->getAllTenants();
+                        if (!empty($tenants)) {
+                            $tenant = $tenants[0];
+                            $this->info("🔍 Auto-detected tenant: {$tenant}");
+                        }
+                    }
                 }
+                
+                if ($tenant) {
+                    $this->info("🌐 Fixing indexes for tenant: {$tenant}");
+                } else {
+                    $this->info("🌐 Fixing indexes (no tenant - single-tenant mode)");
+                }
+                
                 $this->fixIndexesForTenant($client, $tenant);
             }
             
@@ -51,15 +70,22 @@ class FixPrimaryKeysCommand extends Command
     {
         $config = app('config')->get('global-search');
         $mappings = $config['mappings'] ?? [];
+        $multiTenantEnabled = $config['tenant']['enabled'] ?? false;
         
         foreach ($mappings as $mapping) {
             $modelClass = $mapping['model'];
-            $indexName = $mapping['index'];
+            $baseIndexName = $mapping['index'];
             $primaryKey = $mapping['primary_key'] ?? $mapping['primaryKey'] ?? 'id';
             
-            // Add tenant suffix if multi-tenant
-            if ($tenant) {
-                $indexName = "{$indexName}_{$tenant}";
+            // Determine correct index name based on multi-tenancy
+            if ($multiTenantEnabled && $tenant) {
+                $indexName = "{$baseIndexName}_{$tenant}";
+            } elseif (!$multiTenantEnabled) {
+                $indexName = $baseIndexName;
+            } else {
+                // Multi-tenancy enabled but no tenant - skip
+                $this->warn("⚠️  Multi-tenancy enabled but no tenant ID provided. Skipping {$baseIndexName}");
+                continue;
             }
             
             $this->info("Checking index: {$indexName}");
