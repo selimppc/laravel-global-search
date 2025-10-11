@@ -20,7 +20,7 @@ class GlobalSearchService
         private array $config
     ) {}
 
-    public function search(string $query, array $filters = [], int $limit = 10, ?string $tenant = null, array $sort = []): array
+    public function search(string $query, array $filters = [], int $limit = 10, ?string $tenant = null, array $sort = [], int $offset = 0): array
     {
         try {
             $tenant = $tenant ?? $this->tenantResolver->getCurrentTenant();
@@ -30,20 +30,20 @@ class GlobalSearchService
             $cacheEnabled = $this->config['cache']['enabled'] ?? true;
             
             if (!$cacheEnabled) {
-                return $this->performSearchQuery($query, $filters, $limit, $tenant, $sort);
+                return $this->performSearchQuery($query, $filters, $limit, $tenant, $sort, $offset);
             }
             
             // Cache search results for performance
-            $cacheKey = $this->buildSearchCacheKey($query, $filters, $limit, $tenant, $sort);
+            $cacheKey = $this->buildSearchCacheKey($query, $filters, $limit, $tenant, $sort, $offset);
             
-            return Cache::remember($cacheKey, $cacheTtl, function () use ($query, $filters, $limit, $tenant, $sort) {
+            return Cache::remember($cacheKey, $cacheTtl, function () use ($query, $filters, $limit, $tenant, $sort, $offset) {
                 $indexes = $this->getIndexes();
                 
                 if (empty($indexes)) {
-                    return $this->emptyResult($query, $limit);
+                    return $this->emptyResult($query, $limit, $offset);
                 }
 
-                return $this->performSearchQuery($query, $filters, $limit, $tenant, $sort);
+                return $this->performSearchQuery($query, $filters, $limit, $tenant, $sort, $offset);
             });
 
         } catch (\Exception $e) {
@@ -53,19 +53,19 @@ class GlobalSearchService
                 'error' => $e->getMessage()
             ]);
             
-            return $this->emptyResult($query, $limit);
+            return $this->emptyResult($query, $limit, $offset);
         }
     }
     
-    private function performSearchQuery(string $query, array $filters, int $limit, ?string $tenant, array $sort): array
+    private function performSearchQuery(string $query, array $filters, int $limit, ?string $tenant, array $sort, int $offset): array
     {
         $indexes = $this->getIndexes();
         
         if (empty($indexes)) {
-            return $this->emptyResult($query, $limit);
+            return $this->emptyResult($query, $limit, $offset);
         }
 
-        $results = $this->performSearch($query, $filters, $indexes, $limit, $tenant, $sort);
+        $results = $this->performSearch($query, $filters, $indexes, $limit, $tenant, $sort, $offset);
         
         // Log only errors, minimal info logging
         if (empty($results['hits'])) {
@@ -134,7 +134,7 @@ class GlobalSearchService
         Log::info("Reindex completed: {$totalJobs} jobs dispatched for tenant: " . ($tenant ?? 'default'));
     }
 
-    private function performSearch(string $query, array $filters, array $indexes, int $limit, ?string $tenant, array $sort = []): array
+    private function performSearch(string $query, array $filters, array $indexes, int $limit, ?string $tenant, array $sort = [], int $offset = 0): array
     {
         $startTime = microtime(true);
         $client = App::make(Client::class);
@@ -144,7 +144,7 @@ class GlobalSearchService
         foreach ($indexes as $indexName) {
             try {
                 $tenantIndex = $this->tenantResolver->getTenantIndexName($indexName, $tenant);
-                $searchOptions = $this->buildSearchOptions($filters, $limit, $tenant, $sort);
+                $searchOptions = $this->buildSearchOptions($filters, $limit, $tenant, $sort, $offset);
                 
                 // Get the index first, then call search on it
                 $index = $client->index($tenantIndex);
@@ -167,9 +167,9 @@ class GlobalSearchService
             }
         }
 
-        // Sort by score and limit
+        // Sort by score and apply offset + limit
         usort($allHits, fn($a, $b) => ($b['_score'] ?? 0) <=> ($a['_score'] ?? 0));
-        $limitedHits = array_slice($allHits, 0, $limit);
+        $paginatedHits = array_slice($allHits, $offset, $limit);
         
         // Log slow queries (configurable)
         $duration = (microtime(true) - $startTime) * 1000; // milliseconds
@@ -181,17 +181,19 @@ class GlobalSearchService
                 'filters' => $filters,
                 'indexes' => array_keys($indexes),
                 'tenant' => $tenant,
-                'hits' => count($limitedHits)
+                'hits' => count($paginatedHits)
             ]);
         }
 
         return [
-            'hits' => $limitedHits,
+            'hits' => $paginatedHits,
             'meta' => [
                 'total' => $totalHits,
+                'count' => count($paginatedHits),
+                'offset' => $offset,
+                'limit' => $limit,
                 'indexes' => array_keys($indexes),
                 'query' => $query,
-                'limit' => $limit,
                 'tenant' => $tenant,
                 'duration_ms' => round($duration, 2)
             ]
@@ -207,9 +209,14 @@ class GlobalSearchService
         return array_unique(array_merge($federationIndexes, $mappingIndexes));
     }
 
-    private function buildSearchOptions(array $filters, int $limit, ?string $tenant, array $sort = []): array
+    private function buildSearchOptions(array $filters, int $limit, ?string $tenant, array $sort = [], int $offset = 0): array
     {
         $options = ['limit' => $limit];
+        
+        // Add offset if provided
+        if ($offset > 0) {
+            $options['offset'] = $offset;
+        }
         
         if (!empty($filters)) {
             $filterString = $this->buildFilterString($filters);
@@ -286,25 +293,28 @@ class GlobalSearchService
         return $sortArray;
     }
 
-    private function emptyResult(string $query, int $limit): array
+    private function emptyResult(string $query, int $limit, int $offset = 0): array
     {
         return [
             'hits' => [],
             'meta' => [
                 'total' => 0,
+                'count' => 0,
+                'offset' => $offset,
+                'limit' => $limit,
                 'indexes' => [],
-                'query' => $query,
-                'limit' => $limit
+                'query' => $query
             ]
         ];
     }
 
-    private function buildSearchCacheKey(string $query, array $filters, int $limit, ?string $tenant, array $sort = []): string
+    private function buildSearchCacheKey(string $query, array $filters, int $limit, ?string $tenant, array $sort = [], int $offset = 0): string
     {
         return 'global_search.' . md5(serialize([
             'query' => $query,
             'filters' => $filters,
             'limit' => $limit,
+            'offset' => $offset,
             'tenant' => $tenant,
             'sort' => $sort
         ]));

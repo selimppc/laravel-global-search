@@ -248,8 +248,11 @@ GET /global-search?q=product&filters[status]=active&filters[category]=electronic
 # Sort
 GET /global-search?q=product&sort[price]=asc&sort[created_at]=desc
 
-# Both
-GET /global-search?q=product&filters[status]=active&sort[price]=asc&limit=20
+# Pagination (offset + limit)
+GET /global-search?q=product&limit=20&offset=40
+
+# Combined: Filter + Sort + Pagination
+GET /global-search?q=product&filters[status]=active&sort[price]=asc&limit=20&offset=0
 ```
 
 ---
