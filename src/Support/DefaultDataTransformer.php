@@ -180,12 +180,15 @@ class DefaultDataTransformer implements DataTransformer
 
     private function addMetadata($model, array $data): array
     {
+        // Use computed URL if it exists, otherwise generate one
+        $url = $data['url'] ?? $this->generateUrl($model);
+        
         // Add search metadata
         $data['_search_metadata'] = [
             'model_type' => class_basename($model),
             'model_class' => get_class($model),
             'indexed_at' => now()->toISOString(),
-            'url' => $this->generateUrl($model),
+            'url' => $url,
         ];
         
         return $data;
